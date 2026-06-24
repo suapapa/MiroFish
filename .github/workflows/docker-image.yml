@@ -2,6 +2,7 @@ name: Build and push Docker image
 
 on:
   push:
+    branches: ["main"]
     tags: ["*"]
   workflow_dispatch:
 
@@ -37,13 +38,14 @@ jobs:
           tags: |
             type=ref,event=tag
             type=sha
-            type=raw,value=latest
+            type=raw,value=latest,enable={{is_default_branch}}
 
       - name: Build and push
         uses: docker/build-push-action@v5
         with:
           context: .
           file: ./Dockerfile
+          platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
