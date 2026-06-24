@@ -1,14 +1,35 @@
 services:
-  mirofish:
-    image: ghcr.io/666ghj/mirofish:latest
-    # 加速镜像（如拉取缓慢可替换上方地址）
-    # image: ghcr.nju.edu.cn/666ghj/mirofish:latest
-    container_name: mirofish
+  # 后端：gunicorn WSGI 服务（仅在内部网络暴露，不直接对外）
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    image: mirofish-backend:local
+    container_name: mirofish-backend
     env_file:
       - .env
-    ports:
-      - "3000:3000"
-      - "5001:5001"
+    environment:
+      # 生产安全默认：关闭调试器；SECRET_KEY 请在 .env 中提供
+      - FLASK_DEBUG=false
+      # gunicorn 调优（可按机器核数调整）
+      - GUNICORN_WORKERS=4
+      - GUNICORN_THREADS=2
+      - GUNICORN_TIMEOUT=600
     restart: unless-stopped
     volumes:
       - ./backend/uploads:/app/backend/uploads
+    expose:
+      - "5001"
+
+  # 前端：nginx 提供静态资源，并将 /api 反向代理到 backend
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    image: mirofish-frontend:local
+    container_name: mirofish-frontend
+    depends_on:
+      - backend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"

@@ -167,14 +167,21 @@ npm run frontend  # Start frontend only
 ```bash
 # 1. Configure environment variables (same as source deployment)
 cp .env.example .env
+# IMPORTANT: set a strong SECRET_KEY in .env (required in production mode)
 
-# 2. Pull image and start
-docker compose up -d
+# 2. Build and start (frontend via nginx, backend via gunicorn)
+docker compose up -d --build
 ```
 
-Reads `.env` from root directory by default, maps ports `3000 (frontend) / 5001 (backend)`
+Reads `.env` from the root directory by default. Only the frontend is published on
+the host at `http://localhost:3000`; it serves the production-built SPA and reverse-proxies
+`/api` to the backend over the internal network, so the backend port is not exposed externally.
 
-> Mirror address for faster pulling is provided as comments in `docker-compose.yml`, replace if needed.
+Production hardening notes:
+- Backend runs under **gunicorn** (not the Flask dev server); the Werkzeug debugger is **off** by default (`FLASK_DEBUG=false`).
+- `SECRET_KEY` is **required** in production; the container refuses to start without it.
+- CORS is closed by default (same-origin via nginx). Override with `CORS_ORIGINS` (comma-separated, or `*`) only if you call the API cross-origin.
+- Frontend is a minified static build; tune gunicorn via `GUNICORN_WORKERS` / `GUNICORN_THREADS` / `GUNICORN_TIMEOUT`.
 
 ## 📬 Join the Conversation
 

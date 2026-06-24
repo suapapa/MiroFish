@@ -21,8 +21,13 @@ class Config:
     """Flask配置类"""
     
     # Flask配置
-    SECRET_KEY = os.environ.get('SECRET_KEY', 'mirofish-secret-key')
-    DEBUG = os.environ.get('FLASK_DEBUG', 'True').lower() == 'true'
+    # 生产环境必须通过环境变量提供 SECRET_KEY；仅在调试模式下回退到开发用默认值
+    SECRET_KEY = os.environ.get('SECRET_KEY')
+    # 安全默认：DEBUG 默认关闭，避免在容器中暴露 Werkzeug 交互式调试器（RCE 风险）
+    DEBUG = os.environ.get('FLASK_DEBUG', 'False').lower() == 'true'
+
+    # CORS 允许的来源：默认仅同源（空），可用逗号分隔的列表覆盖，'*' 表示全部
+    CORS_ORIGINS = os.environ.get('CORS_ORIGINS', '')
     
     # JSON配置 - 禁用ASCII转义，让中文直接显示（而不是 \uXXXX 格式）
     JSON_AS_ASCII = False
@@ -71,5 +76,8 @@ class Config:
             errors.append("LLM_API_KEY 未配置")
         if not cls.ZEP_API_KEY:
             errors.append("ZEP_API_KEY 未配置")
+        # 非调试（生产）模式必须显式配置 SECRET_KEY
+        if not cls.DEBUG and not cls.SECRET_KEY:
+            errors.append("SECRET_KEY 未配置（生产环境必填）")
         return errors
 

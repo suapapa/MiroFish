@@ -20,6 +20,16 @@ def create_app(config_class=Config):
     """Flask应用工厂函数"""
     app = Flask(__name__)
     app.config.from_object(config_class)
+
+    # SECRET_KEY 兜底：仅在调试模式下允许使用临时开发密钥；
+    # 生产模式缺失时直接报错，避免使用可预测的签名密钥
+    if not app.config.get('SECRET_KEY'):
+        if app.config.get('DEBUG'):
+            app.config['SECRET_KEY'] = 'mirofish-dev-secret-key'
+        else:
+            raise RuntimeError(
+                "SECRET_KEY 未配置：生产模式必须通过环境变量设置 SECRET_KEY"
+            )
     
     # 设置JSON编码：确保中文直接显示（而不是 \uXXXX 格式）
     # Flask >= 2.3 使用 app.json.ensure_ascii，旧版本使用 JSON_AS_ASCII 配置
@@ -39,8 +49,12 @@ def create_app(config_class=Config):
         logger.info("MiroFish Backend 启动中...")
         logger.info("=" * 50)
     
-    # 启用CORS
-    CORS(app, resources={r"/api/*": {"origins": "*"}})
+    # 启用CORS：默认仅同源（前端经 nginx 反向代理与后端同源，无需放开）
+    # 可通过 CORS_ORIGINS 环境变量配置（逗号分隔，'*' 表示全部）
+    cors_origins_raw = app.config.get('CORS_ORIGINS', '') or ''
+    cors_origins = [o.strip() for o in cors_origins_raw.split(',') if o.strip()]
+    if cors_origins:
+        CORS(app, resources={r"/api/*": {"origins": cors_origins}})
     
     # 注册模拟进程清理函数（确保服务器关闭时终止所有模拟进程）
     from .services.simulation_runner import SimulationRunner

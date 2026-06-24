@@ -21,6 +21,10 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from app import create_app
 from app.config import Config
 
+# 模块级 WSGI 应用对象，供 gunicorn 等 WSGI 服务器使用（gunicorn run:app）
+# 生产环境通过 gunicorn 启动，不会执行下方的开发用 app.run()
+app = create_app()
+
 
 def main():
     """主函数"""
@@ -33,9 +37,7 @@ def main():
         print("\n请检查 .env 文件中的配置")
         sys.exit(1)
     
-    # 创建应用
-    app = create_app()
-    
+    # 复用模块级应用对象（与 gunicorn 使用同一个 create_app 实例）
     # 获取运行配置
     host = os.environ.get('FLASK_HOST', '0.0.0.0')
     port = int(os.environ.get('FLASK_PORT', 5001))
