@@ -1061,7 +1061,7 @@ class ZepToolsService:
                         "related_facts": related_facts  # 完整输出，不截断
                     })
             except Exception as e:
-                logger.debug(f"获取节点 {uuid} 失败: {e}")
+                logger.debug(f"Failed to fetch node {uuid}: {e}")
                 continue
         
         result.entity_insights = entity_insights

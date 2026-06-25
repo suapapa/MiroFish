@@ -50,10 +50,10 @@ def main():
     # 验证配置
     errors = Config.validate()
     if errors:
-        print("配置错误:")
+        print("Configuration error:")
         for err in errors:
             print(f"  - {err}")
-        print("\n请检查 .env 文件中的配置")
+        print("\nPlease check the configuration in the .env file")
         sys.exit(1)
     
     # 复用模块级应用对象（与 gunicorn 使用同一个 create_app 实例）

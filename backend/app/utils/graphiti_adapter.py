@@ -176,7 +176,7 @@ def _build_entity_types(ontology: Dict[str, Any]) -> Dict[str, type]:
     for entity_def in ontology.get("entity_types", []) or []:
         name = (entity_def.get("name") or "").strip()
         if not name:
-            logger.warning("跳过缺少 name 的实体类型定义")
+            logger.warning("Skipping entity type definition missing name")
             continue
         description = entity_def.get("description", f"A {name} entity.")
         fields: Dict[str, Any] = {}
@@ -200,7 +200,7 @@ def _build_edge_types(ontology: Dict[str, Any]) -> tuple[Dict[str, type], Dict[t
     for edge_def in ontology.get("edge_types", []) or []:
         name = (edge_def.get("name") or "").strip()
         if not name:
-            logger.warning("跳过缺少 name 的边类型定义")
+            logger.warning("Skipping edge type definition missing name")
             continue
         description = edge_def.get("description", f"A {name} relationship.")
         fields: Dict[str, Any] = {}
@@ -237,7 +237,7 @@ class _OntologyStore:
             with open(_ontology_path(graph_id), 'w', encoding='utf-8') as f:
                 json.dump(ontology, f, ensure_ascii=False, indent=2)
         except Exception as e:
-            logger.warning(f"持久化本体失败 (graph={graph_id}): {e}")
+            logger.warning(f"Failed to persist ontology (graph={graph_id}): {e}")
 
     def load(self, graph_id: str) -> Dict[str, Any]:
         with self._lock:
@@ -252,7 +252,7 @@ class _OntologyStore:
                     self._cache[graph_id] = ontology
                 return ontology
             except Exception as e:
-                logger.warning(f"读取本体失败 (graph={graph_id}): {e}")
+                logger.warning(f"Failed to load ontology (graph={graph_id}): {e}")
         return {}
 
     def types_for(self, graph_id: str):
@@ -276,7 +276,7 @@ class _OntologyStore:
             try:
                 shutil.rmtree(d)
             except Exception as e:
-                logger.warning(f"删除本体目录失败 (graph={graph_id}): {e}")
+                logger.warning(f"Failed to delete ontology directory (graph={graph_id}): {e}")
 
 
 _ontology_store = _OntologyStore()
@@ -294,7 +294,6 @@ def _create_graphiti():
     """惰性创建 Graphiti 实例（FalkorDB 驱动 + OpenAI 兼容 LLM/Embedder）。"""
     from graphiti_core import Graphiti
     from graphiti_core.driver.falkordb_driver import FalkorDriver
-    from graphiti_core.llm_client.openai_client import OpenAIClient
     from graphiti_core.llm_client.config import LLMConfig
     from graphiti_core.embedder.openai import OpenAIEmbedder, OpenAIEmbedderConfig
     from graphiti_core.cross_encoder.openai_reranker_client import OpenAIRerankerClient
@@ -313,7 +312,21 @@ def _create_graphiti():
         model=Config.LLM_MODEL_NAME,
         small_model=Config.LLM_SMALL_MODEL_NAME,
     )
-    llm_client = OpenAIClient(config=llm_config)
+
+    # 选择 LLM 客户端：
+    # OpenAIClient 依赖 OpenAI 专有的 Responses API（responses.parse），第三方兼容端点
+    # （如阿里云 qwen/dashscope）无法支持，会返回截断/非法 JSON 导致实体/边抽取失败：
+    #   "Invalid JSON: EOF while parsing a string" / "Source entity not found in nodes"。
+    # 默认改用 OpenAIGenericClient（标准 /chat/completions + json_object），兼容性更好。
+    if Config.GRAPHITI_LLM_CLIENT == 'openai':
+        from graphiti_core.llm_client.openai_client import OpenAIClient
+        llm_client = OpenAIClient(config=llm_config)
+    else:
+        from graphiti_core.llm_client.openai_generic_client import OpenAIGenericClient
+        llm_client = OpenAIGenericClient(
+            config=llm_config,
+            structured_output_mode=Config.LLM_STRUCTURED_OUTPUT_MODE,
+        )
 
     embedder = OpenAIEmbedder(
         config=OpenAIEmbedderConfig(
@@ -336,7 +349,7 @@ def _create_graphiti():
 
     # 构建索引/约束（幂等）
     _run(graphiti.build_indices_and_constraints())
-    logger.info("Graphiti(FalkorDB) 初始化完成")
+    logger.info("Graphiti(FalkorDB) initialized")
     return graphiti
 
 

@@ -33,7 +33,12 @@ def get_locale() -> str:
 
 
 def t(key: str, **kwargs) -> str:
-    locale = get_locale()
+    # Console/log output is always emitted in English so that container logs
+    # (docker logs) stay readable regardless of the UI locale.
+    if key.startswith('console.'):
+        locale = 'en'
+    else:
+        locale = get_locale()
     messages = _translations.get(locale, _translations.get('zh', {}))
 
     value = messages
