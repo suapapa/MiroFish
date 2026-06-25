@@ -44,6 +44,19 @@ class Config:
     # Graphiti 抽取阶段使用的小模型（可选，默认与主模型一致）
     LLM_SMALL_MODEL_NAME = os.environ.get('LLM_SMALL_MODEL_NAME', '') or LLM_MODEL_NAME
 
+    # Graphiti 使用的 LLM 客户端类型（决定如何向模型请求结构化输出）：
+    #   - 'generic'(默认): graphiti.OpenAIGenericClient，走标准 /chat/completions，
+    #     适配所有 OpenAI 兼容服务商（阿里云 qwen/dashscope、DeepSeek、vLLM、Ollama 等）。
+    #   - 'openai': graphiti.OpenAIClient，使用 OpenAI 的 Responses API + 结构化 parse，
+    #     仅适用于 OpenAI 官方端点；第三方兼容端点会返回截断/非法 JSON 导致抽取失败。
+    GRAPHITI_LLM_CLIENT = os.environ.get('GRAPHITI_LLM_CLIENT', 'generic').lower()
+    # generic 客户端的结构化输出模式：
+    #   - 'json_object'(默认): 把 schema 注入到提示词中，兼容性最好（qwen/dashscope、DeepSeek
+    #     等不强制 json_schema 的服务商）。
+    #   - 'json_schema': 原生 response_format=json_schema（vLLM/llama.cpp 等可约束解码，
+    #     OpenAI 官方为尽力而为）。
+    LLM_STRUCTURED_OUTPUT_MODE = os.environ.get('LLM_STRUCTURED_OUTPUT_MODE', 'json_object').lower()
+
     # ===== 知识图谱：Graphiti + FalkorDB（自托管，替代 Zep Cloud）=====
     # FalkorDB 连接配置（docker-compose 中通过环境变量覆盖为服务名 falkordb）
     GRAPH_DB_HOST = os.environ.get('GRAPH_DB_HOST', 'localhost')
