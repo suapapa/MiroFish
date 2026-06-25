@@ -51,11 +51,10 @@ class Config:
     #     仅适用于 OpenAI 官方端点；第三方兼容端点会返回截断/非法 JSON 导致抽取失败。
     GRAPHITI_LLM_CLIENT = os.environ.get('GRAPHITI_LLM_CLIENT', 'generic').lower()
     # generic 客户端的结构化输出模式：
-    #   - 'json_object'(默认): 把 schema 注入到提示词中，兼容性最好（qwen/dashscope、DeepSeek
-    #     等不强制 json_schema 的服务商）。
-    #   - 'json_schema': 原生 response_format=json_schema（vLLM/llama.cpp 等可约束解码，
-    #     OpenAI 官方为尽力而为）。
-    LLM_STRUCTURED_OUTPUT_MODE = os.environ.get('LLM_STRUCTURED_OUTPUT_MODE', 'json_object').lower()
+    #   - 'json_schema'(默认): 原生 response_format=json_schema。对现代 OpenAI 兼容端点
+    #     （vLLM/llama.cpp/多数代理层）更稳，且可避免模型把 schema 本身回显回来。
+    #   - 'json_object': 把 schema 注入到提示词中。仅在服务商明确不支持 json_schema 时回退。
+    LLM_STRUCTURED_OUTPUT_MODE = os.environ.get('LLM_STRUCTURED_OUTPUT_MODE', 'json_schema').lower()
 
     # ===== 知识图谱：Graphiti + FalkorDB（自托管，替代 Zep Cloud）=====
     # FalkorDB 连接配置（docker-compose 中通过环境变量覆盖为服务名 falkordb）
@@ -114,4 +113,3 @@ class Config:
         if not cls.DEBUG and not cls.SECRET_KEY:
             errors.append("SECRET_KEY 未配置（生产环境必填）")
         return errors
-

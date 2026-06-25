@@ -317,12 +317,19 @@ def _create_graphiti():
     # OpenAIClient 依赖 OpenAI 专有的 Responses API（responses.parse），第三方兼容端点
     # （如阿里云 qwen/dashscope）无法支持，会返回截断/非法 JSON 导致实体/边抽取失败：
     #   "Invalid JSON: EOF while parsing a string" / "Source entity not found in nodes"。
-    # 默认改用 OpenAIGenericClient（标准 /chat/completions + json_object），兼容性更好。
+    # 因此默认使用 OpenAIGenericClient（标准 /chat/completions）。其 structured output
+    # 默认优先走 json_schema；仅当服务商明确不支持时再通过环境变量回退到 json_object。
     if Config.GRAPHITI_LLM_CLIENT == 'openai':
         from graphiti_core.llm_client.openai_client import OpenAIClient
         llm_client = OpenAIClient(config=llm_config)
     else:
         from graphiti_core.llm_client.openai_generic_client import OpenAIGenericClient
+        if Config.LLM_STRUCTURED_OUTPUT_MODE == 'json_object':
+            logger.warning(
+                "Graphiti structured output mode is 'json_object'. Some OpenAI-compatible "
+                "models may echo the JSON schema instead of returning extracted data. "
+                "Prefer 'json_schema' unless your provider rejects it."
+            )
         llm_client = OpenAIGenericClient(
             config=llm_config,
             structured_output_mode=Config.LLM_STRUCTURED_OUTPUT_MODE,
