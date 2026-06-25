@@ -50,10 +50,13 @@ export function getTaskStatus(taskId) {
  * @param {String} graphId - 图谱ID
  * @returns {Promise}
  */
-export function getGraphData(graphId) {
+export function getGraphData(graphId, options = {}) {
+  const { refresh = false, timeout = 120000 } = options
   return service({
     url: `/api/graph/data/${graphId}`,
-    method: 'get'
+    method: 'get',
+    params: refresh ? { refresh: 'true' } : {},
+    timeout
   })
 }
 

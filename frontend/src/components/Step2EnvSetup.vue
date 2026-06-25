@@ -768,20 +768,53 @@ const selectProfile = (profile) => {
   selectedProfile.value = profile
 }
 
-// 自动开始准备模拟
-const startPrepareSimulation = async () => {
+// 自动开始或恢复准备模拟
+const resumeOrStartPrepare = async () => {
   if (!props.simulationId) {
     addLog(t('log.errorMissingSimId'))
     emit('update-status', 'error')
     return
   }
-  
-  // 标记第一步完成，开始第二步
+
   phase.value = 1
   addLog(t('log.simInstanceCreated', { id: props.simulationId }))
-  addLog(t('log.preparingSimEnv'))
   emit('update-status', 'processing')
-  
+
+  try {
+    const statusRes = await getPrepareStatus({ simulation_id: props.simulationId })
+
+    if (statusRes.success && statusRes.data) {
+      const existing = statusRes.data
+
+      if (existing.already_prepared) {
+        addLog(t('log.detectedExistingPrep'))
+        await loadPreparedData()
+        return
+      }
+
+      const activeStatuses = ['processing', 'pending', 'preparing']
+      if (existing.task_id && activeStatuses.includes(existing.status)) {
+        taskId.value = existing.task_id
+        prepareProgress.value = existing.progress || 0
+        addLog(t('log.resumedPrepareTask'))
+        addLog(t('log.prepareTaskId', { taskId: existing.task_id }))
+        startPolling()
+        startProfilesPolling()
+        return
+      }
+    }
+
+    await startPrepareSimulation()
+  } catch (err) {
+    addLog(t('log.prepareException', { error: err.message }))
+    emit('update-status', 'error')
+  }
+}
+
+// 启动新的准备任务
+const startPrepareSimulation = async () => {
+  addLog(t('log.preparingSimEnv'))
+
   try {
     const res = await prepareSimulation({
       simulation_id: props.simulationId,
@@ -797,10 +830,13 @@ const startPrepareSimulation = async () => {
       }
       
       taskId.value = res.data.task_id
-      addLog(t('log.prepareTaskStarted'))
+      if (res.data.resumed) {
+        addLog(t('log.resumedPrepareTask'))
+      } else {
+        addLog(t('log.prepareTaskStarted'))
+      }
       addLog(t('log.prepareTaskId', { taskId: res.data.task_id }))
       
-      // 立即设置预期Agent总数（从prepare接口返回值获取）
       if (res.data.expected_entities_count) {
         expectedTotal.value = res.data.expected_entities_count
         addLog(t('log.zepEntitiesFound', { count: res.data.expected_entities_count }))
@@ -810,9 +846,7 @@ const startPrepareSimulation = async () => {
       }
       
       addLog(t('log.startPollingProgress'))
-      // 开始轮询进度
       startPolling()
-      // 开始实时获取 Profiles
       startProfilesPolling()
     } else {
       addLog(t('log.prepareFailed', { error: res.error || t('common.unknownError') }))
@@ -857,6 +891,10 @@ const pollPrepareStatus = async () => {
     
     if (res.success && res.data) {
       const data = res.data
+
+      if (data.task_id && !taskId.value) {
+        taskId.value = data.task_id
+      }
       
       // 更新进度
       prepareProgress.value = data.progress || 0
@@ -1069,10 +1107,9 @@ watch(() => props.systemLogs?.length, () => {
 })
 
 onMounted(() => {
-  // 自动开始准备流程
   if (props.simulationId) {
     addLog(t('log.step2Init'))
-    startPrepareSimulation()
+    resumeOrStartPrepare()
   }
 })
 

@@ -17,6 +17,9 @@ from ..models.task import TaskManager, TaskStatus
 from ..utils.zep_paging import fetch_all_nodes, fetch_all_edges
 from .text_processor import TextProcessor
 from ..utils.locale import t, get_locale, set_locale
+from ..utils.logger import get_logger
+
+logger = get_logger('mirofish.graph_builder')
 
 
 @dataclass
@@ -339,16 +342,25 @@ class GraphBuilderService:
             entity_types=list(entity_types)
         )
     
-    def get_graph_data(self, graph_id: str) -> Dict[str, Any]:
+    def get_graph_data(self, graph_id: str, use_cache: bool = True) -> Dict[str, Any]:
         """
         获取完整图谱数据（包含详细信息）
         
         Args:
             graph_id: 图谱ID
+            use_cache: 是否优先读取构建时持久化的缓存
             
         Returns:
             包含nodes和edges的字典，包括时间信息、属性等详细数据
         """
+        from ..utils.graph_cache import load_graph_cache, save_graph_cache
+
+        if use_cache:
+            cached = load_graph_cache(graph_id)
+            if cached and cached.get('nodes') is not None:
+                logger.info(f"Loaded graph data from cache: graph={graph_id}")
+                return cached
+
         nodes = fetch_all_nodes(self.client, graph_id)
         edges = fetch_all_edges(self.client, graph_id)
 
@@ -408,13 +420,15 @@ class GraphBuilderService:
                 "episodes": episodes or [],
             })
         
-        return {
+        result = {
             "graph_id": graph_id,
             "nodes": nodes_data,
             "edges": edges_data,
             "node_count": len(nodes_data),
             "edge_count": len(edges_data),
         }
+        save_graph_cache(graph_id, result)
+        return result
     
     def delete_graph(self, graph_id: str):
         """删除图谱"""

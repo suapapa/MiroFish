@@ -104,6 +104,22 @@ class TaskManager:
         """获取任务"""
         with self._task_lock:
             return self._tasks.get(task_id)
+
+    def find_active_task_for_simulation(
+        self,
+        simulation_id: str,
+        task_type: str,
+    ) -> Optional[Task]:
+        """按 simulation_id 查找仍在进行中的任务（pending/processing）。"""
+        with self._task_lock:
+            for task in self._tasks.values():
+                if (
+                    task.task_type == task_type
+                    and task.metadata.get("simulation_id") == simulation_id
+                    and task.status in (TaskStatus.PENDING, TaskStatus.PROCESSING)
+                ):
+                    return task
+        return None
     
     def update_task(
         self,

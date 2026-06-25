@@ -124,7 +124,7 @@ class ZepEntityReader:
     
     def get_all_nodes(self, graph_id: str) -> List[Dict[str, Any]]:
         """
-        获取图谱的所有节点（分页获取）
+        获取图谱的所有节点（分页获取；优先使用构建缓存）
 
         Args:
             graph_id: 图谱ID
@@ -132,6 +132,13 @@ class ZepEntityReader:
         Returns:
             节点列表
         """
+        from ..utils.graph_cache import load_graph_cache
+
+        cached = load_graph_cache(graph_id)
+        if cached and cached.get('nodes') is not None:
+            logger.info(f"Loaded {len(cached['nodes'])} nodes from cache for graph {graph_id}")
+            return cached['nodes']
+
         logger.info(f"Fetching all nodes for graph {graph_id}...")
 
         nodes = fetch_all_nodes(self.client, graph_id)
@@ -151,7 +158,7 @@ class ZepEntityReader:
 
     def get_all_edges(self, graph_id: str) -> List[Dict[str, Any]]:
         """
-        获取图谱的所有边（分页获取）
+        获取图谱的所有边（分页获取；优先使用构建缓存）
 
         Args:
             graph_id: 图谱ID
@@ -159,6 +166,13 @@ class ZepEntityReader:
         Returns:
             边列表
         """
+        from ..utils.graph_cache import load_graph_cache
+
+        cached = load_graph_cache(graph_id)
+        if cached and cached.get('edges') is not None:
+            logger.info(f"Loaded {len(cached['edges'])} edges from cache for graph {graph_id}")
+            return cached['edges']
+
         logger.info(f"Fetching all edges for graph {graph_id}...")
 
         edges = fetch_all_edges(self.client, graph_id)

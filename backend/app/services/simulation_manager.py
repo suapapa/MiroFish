@@ -74,6 +74,9 @@ class SimulationState:
     
     # 错误信息
     error: Optional[str] = None
+
+    # 进行中的准备任务（用于页面刷新后恢复轮询）
+    prepare_task_id: Optional[str] = None
     
     def to_dict(self) -> Dict[str, Any]:
         """完整状态字典（内部使用）"""
@@ -95,6 +98,7 @@ class SimulationState:
             "created_at": self.created_at,
             "updated_at": self.updated_at,
             "error": self.error,
+            "prepare_task_id": self.prepare_task_id,
         }
     
     def to_simple_dict(self) -> Dict[str, Any]:
@@ -109,6 +113,7 @@ class SimulationState:
             "entity_types": self.entity_types,
             "config_generated": self.config_generated,
             "error": self.error,
+            "prepare_task_id": self.prepare_task_id,
         }
 
 
@@ -186,6 +191,7 @@ class SimulationManager:
             created_at=data.get("created_at", datetime.now().isoformat()),
             updated_at=data.get("updated_at", datetime.now().isoformat()),
             error=data.get("error"),
+            prepare_task_id=data.get("prepare_task_id"),
         )
         
         self._simulations[simulation_id] = state

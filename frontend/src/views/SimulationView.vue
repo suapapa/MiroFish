@@ -273,7 +273,7 @@ const loadSimulationData = async () => {
 const loadGraph = async (graphId) => {
   graphLoading.value = true
   try {
-    const res = await getGraphData(graphId)
+    const res = await getGraphData(graphId, { timeout: 120000 })
     if (res.success) {
       graphData.value = res.data
       addLog(t('log.graphDataLoadSuccess'))

@@ -77,9 +77,15 @@ class _AsyncRunner:
         asyncio.set_event_loop(self._loop)
         self._loop.run_forever()
 
-    def run(self, coro):
+    def run(self, coro, timeout: float = 120.0):
         future = asyncio.run_coroutine_threadsafe(coro, self._loop)
-        return future.result()
+        try:
+            return future.result(timeout=timeout)
+        except TimeoutError as e:
+            future.cancel()
+            raise TimeoutError(
+                f"Graphiti async operation timed out after {timeout}s"
+            ) from e
 
     @classmethod
     def instance(cls) -> "_AsyncRunner":
@@ -90,8 +96,18 @@ class _AsyncRunner:
         return cls._instance
 
 
-def _run(coro):
-    return _AsyncRunner.instance().run(coro)
+def _run(coro, timeout: float = 120.0):
+    return _AsyncRunner.instance().run(coro, timeout=timeout)
+
+
+def _run_with_graphiti(coro_factory, timeout: float = 120.0):
+    """在 worker 线程上初始化 Graphiti，再提交协程，避免 loop 线程内嵌套 _run 死锁。"""
+    graphiti = _get_graphiti()
+
+    async def _do():
+        return await coro_factory(graphiti)
+
+    return _run(_do(), timeout=timeout)
 
 
 # ════════════════════════════════════════════════════════════════
@@ -393,14 +409,13 @@ class _NodeNamespace:
     ) -> List[_NodeView]:
         from graphiti_core.nodes import EntityNode
 
-        async def _do():
-            g = _get_graphiti()
+        async def _do(g):
             return await EntityNode.get_by_group_ids(
                 g.driver, [graph_id], limit=limit, uuid_cursor=uuid_cursor
             )
 
         try:
-            nodes = _run(_do())
+            nodes = _run_with_graphiti(_do)
         except Exception as e:
             raise InternalServerError(str(e)) from e
         return [_NodeView(n) for n in (nodes or [])]
@@ -408,21 +423,19 @@ class _NodeNamespace:
     def get(self, uuid_: str = '', **kwargs) -> Optional[_NodeView]:
         from graphiti_core.nodes import EntityNode
 
-        async def _do():
-            g = _get_graphiti()
+        async def _do(g):
             return await EntityNode.get_by_uuid(g.driver, uuid_)
 
-        node = _run(_do())
+        node = _run_with_graphiti(_do)
         return _NodeView(node) if node else None
 
     def get_entity_edges(self, node_uuid: str = '', **kwargs) -> List[_EdgeView]:
         from graphiti_core.edges import EntityEdge
 
-        async def _do():
-            g = _get_graphiti()
+        async def _do(g):
             return await EntityEdge.get_by_node_uuid(g.driver, node_uuid)
 
-        edges = _run(_do())
+        edges = _run_with_graphiti(_do)
         return [_EdgeView(e) for e in (edges or [])]
 
 
@@ -438,14 +451,13 @@ class _EdgeNamespace:
     ) -> List[_EdgeView]:
         from graphiti_core.edges import EntityEdge
 
-        async def _do():
-            g = _get_graphiti()
+        async def _do(g):
             return await EntityEdge.get_by_group_ids(
                 g.driver, [graph_id], limit=limit, uuid_cursor=uuid_cursor
             )
 
         try:
-            edges = _run(_do())
+            edges = _run_with_graphiti(_do)
         except Exception as e:
             raise InternalServerError(str(e)) from e
         return [_EdgeView(e) for e in (edges or [])]
@@ -467,17 +479,18 @@ class _GraphNamespace:
 
     def delete(self, graph_id: str = '', **kwargs):
         """删除该 group_id 下的全部节点/边（及其本体定义）。"""
-        async def _do():
-            g = _get_graphiti()
+        async def _do(g):
             await g.driver.execute_query(
                 "MATCH (n {group_id: $gid}) DETACH DELETE n",
                 gid=graph_id,
             )
 
         try:
-            _run(_do())
+            _run_with_graphiti(_do)
         finally:
             _ontology_store.delete(graph_id)
+            from ..utils.graph_cache import delete_graph_cache
+            delete_graph_cache(graph_id)
 
     def set_ontology(self, graph_ids: Optional[List[str]] = None, ontology: Optional[Dict[str, Any]] = None, **kwargs):
         """保存本体定义（按 graph_id 持久化），写入 episode 时自动应用。"""
@@ -491,8 +504,7 @@ class _GraphNamespace:
 
         entity_types, edge_types, edge_type_map = _ontology_store.types_for(graph_id)
 
-        async def _do():
-            g = _get_graphiti()
+        async def _do(g):
             return await g.add_episode(
                 name=name,
                 episode_body=text,
@@ -505,7 +517,7 @@ class _GraphNamespace:
                 edge_type_map=edge_type_map,
             )
 
-        result = _run(_do())
+        result = _run_with_graphiti(_do, timeout=180.0)
         ep = getattr(result, 'episode', None)
         ep_uuid = getattr(ep, 'uuid', '') if ep else ''
         return _EpisodeView(uuid=ep_uuid)
@@ -535,23 +547,21 @@ class _GraphNamespace:
         return self._search_edges(graph_id, query, limit)
 
     def _search_edges(self, graph_id: str, query: str, limit: int) -> _SearchView:
-        async def _do():
-            g = _get_graphiti()
+        async def _do(g):
             return await g.search(query, group_ids=[graph_id], num_results=limit)
 
-        edges = _run(_do())
+        edges = _run_with_graphiti(_do)
         return _SearchView(edges=[_EdgeView(e) for e in (edges or [])], nodes=[])
 
     def _search_nodes(self, graph_id: str, query: str, limit: int) -> _SearchView:
         from graphiti_core.search.search_config_recipes import NODE_HYBRID_SEARCH_RRF
 
-        async def _do():
-            g = _get_graphiti()
+        async def _do(g):
             cfg = NODE_HYBRID_SEARCH_RRF.model_copy(deep=True)
             cfg.limit = limit
             return await g._search(query, cfg, group_ids=[graph_id])
 
-        results = _run(_do())
+        results = _run_with_graphiti(_do)
         nodes = getattr(results, 'nodes', []) or []
         return _SearchView(edges=[], nodes=[_NodeView(n) for n in nodes])
 

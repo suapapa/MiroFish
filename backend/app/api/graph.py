@@ -565,8 +565,9 @@ def get_graph_data(graph_id: str):
     获取图谱数据（节点和边）
     """
     try:
+        refresh = request.args.get('refresh', 'false').lower() == 'true'
         builder = GraphBuilderService()
-        graph_data = builder.get_graph_data(graph_id)
+        graph_data = builder.get_graph_data(graph_id, use_cache=not refresh)
         
         return jsonify({
             "success": True,

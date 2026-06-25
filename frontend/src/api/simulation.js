@@ -13,7 +13,8 @@ export const createSimulation = (data) => {
  * @param {Object} data - { simulation_id, entity_types?, use_llm_for_profiles?, parallel_profile_count?, force_regenerate? }
  */
 export const prepareSimulation = (data) => {
-  return requestWithRetry(() => service.post('/api/simulation/prepare', data), 3, 1000)
+  // prepare 应立即返回 task_id，短超时即可
+  return service.post('/api/simulation/prepare', data, { timeout: 60000 })
 }
 
 /**
