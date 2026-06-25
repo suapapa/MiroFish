@@ -31,6 +31,11 @@ class Config:
     
     # JSON配置 - 禁用ASCII转义，让中文直接显示（而不是 \uXXXX 格式）
     JSON_AS_ASCII = False
+
+    # LLM 프롬프트 언어: app/prompts/prompt_{lang}.yaml 중 어떤 파일을 로드할지 결정한다.
+    # zh(기본) 는 기존 prompts.yaml 을, en/ko 등은 prompt_{lang}.yaml 을 사용한다.
+    # run.py 의 --prompt-lang 플래그 또는 PROMPT_LANG 환경변수로 지정한다.
+    PROMPT_LANG = os.environ.get('PROMPT_LANG', 'zh')
     
     # LLM配置（统一使用OpenAI格式）
     LLM_API_KEY = os.environ.get('LLM_API_KEY')

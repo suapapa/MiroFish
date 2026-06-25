@@ -2,6 +2,7 @@
 MiroFish Backend 启动入口
 """
 
+import argparse
 import os
 import sys
 
@@ -26,8 +27,26 @@ from app.config import Config
 app = create_app()
 
 
+def _parse_args():
+    parser = argparse.ArgumentParser(description="MiroFish Backend")
+    parser.add_argument(
+        '--prompt-lang',
+        dest='prompt_lang',
+        default=os.environ.get('PROMPT_LANG', 'zh'),
+        help="로드할 LLM 프롬프트 언어 (app/prompts/prompt_{lang}.yaml). "
+             "예: zh(기본), en, ko",
+    )
+    # gunicorn 등 외부 실행기가 넘기는 인자와 충돌하지 않도록 알 수 없는 인자는 무시
+    args, _ = parser.parse_known_args()
+    return args
+
+
 def main():
     """主函数"""
+    # 프롬프트 언어 플래그 적용 (프롬프트는 첫 요청 시 lazy 로드되므로 여기서 설정하면 반영된다)
+    args = _parse_args()
+    os.environ['PROMPT_LANG'] = args.prompt_lang
+
     # 验证配置
     errors = Config.validate()
     if errors:
@@ -42,7 +61,9 @@ def main():
     host = os.environ.get('FLASK_HOST', '0.0.0.0')
     port = int(os.environ.get('FLASK_PORT', 5001))
     debug = Config.DEBUG
-    
+
+    print(f"프롬프트 언어(PROMPT_LANG): {os.environ.get('PROMPT_LANG', 'zh')}")
+
     # 启动服务
     app.run(host=host, port=port, debug=debug, threaded=True)
 
