@@ -36,9 +36,25 @@ class Config:
     LLM_API_KEY = os.environ.get('LLM_API_KEY')
     LLM_BASE_URL = os.environ.get('LLM_BASE_URL', 'https://api.openai.com/v1')
     LLM_MODEL_NAME = os.environ.get('LLM_MODEL_NAME', 'gpt-4o-mini')
-    
-    # Zep配置
-    ZEP_API_KEY = os.environ.get('ZEP_API_KEY')
+    # Graphiti 抽取阶段使用的小模型（可选，默认与主模型一致）
+    LLM_SMALL_MODEL_NAME = os.environ.get('LLM_SMALL_MODEL_NAME', '') or LLM_MODEL_NAME
+
+    # ===== 知识图谱：Graphiti + FalkorDB（自托管，替代 Zep Cloud）=====
+    # FalkorDB 连接配置（docker-compose 中通过环境变量覆盖为服务名 falkordb）
+    GRAPH_DB_HOST = os.environ.get('GRAPH_DB_HOST', 'localhost')
+    GRAPH_DB_PORT = int(os.environ.get('GRAPH_DB_PORT', '6379'))
+    GRAPH_DB_USERNAME = os.environ.get('GRAPH_DB_USERNAME', '') or None
+    GRAPH_DB_PASSWORD = os.environ.get('GRAPH_DB_PASSWORD', '') or None
+    # FalkorDB 内的图数据库名称（各 graph_id 通过 group_id 隔离）
+    GRAPH_DB_NAME = os.environ.get('GRAPH_DB_NAME', 'mirofish')
+
+    # Embedding 配置（Graphiti 需要向量嵌入；默认复用 LLM 凭据）
+    EMBEDDER_API_KEY = os.environ.get('EMBEDDER_API_KEY', '') or LLM_API_KEY
+    EMBEDDER_BASE_URL = os.environ.get('EMBEDDER_BASE_URL', '') or LLM_BASE_URL
+    EMBEDDER_MODEL_NAME = os.environ.get('EMBEDDER_MODEL_NAME', 'text-embedding-3-small')
+    # 向量维度需与 embedding 模型匹配（OpenAI text-embedding-3-small=1536，
+    # 阿里云 text-embedding-v3=1024）。FalkorDB 向量索引依赖此值。
+    EMBEDDER_DIM = int(os.environ.get('EMBEDDER_DIM', '1536'))
     
     # 文件上传配置
     MAX_CONTENT_LENGTH = 50 * 1024 * 1024  # 50MB
@@ -74,8 +90,8 @@ class Config:
         errors: list[str] = []
         if not cls.LLM_API_KEY:
             errors.append("LLM_API_KEY 未配置")
-        if not cls.ZEP_API_KEY:
-            errors.append("ZEP_API_KEY 未配置")
+        if not cls.EMBEDDER_API_KEY:
+            errors.append("EMBEDDER_API_KEY 未配置（嵌入服务，默认复用 LLM_API_KEY）")
         # 非调试（生产）模式必须显式配置 SECRET_KEY
         if not cls.DEBUG and not cls.SECRET_KEY:
             errors.append("SECRET_KEY 未配置（生产环境必填）")

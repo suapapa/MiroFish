@@ -18,8 +18,8 @@ dependencies = [
     # LLM 相关
     "openai>=1.0.0",
     
-    # Zep Cloud
-    "zep-cloud==3.13.0",
+    # 知识图谱（Graphiti + FalkorDB，自托管，替代 Zep Cloud）
+    "graphiti-core[falkordb]>=0.23.0",
     
     # OASIS 社交媒体模拟
     "camel-oasis==0.2.5",
@@ -51,6 +51,12 @@ dev = [
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+# 依赖冲突解决：camel-oasis 硬钉 neo4j==5.23.0，而 graphiti-core 需要 neo4j>=5.26.0。
+# 本项目使用 FalkorDB（非 Neo4j）作为图存储，neo4j 仅为传递依赖、运行时不会被使用，
+# 因此统一覆盖为 graphiti 兼容的版本。
+[tool.uv]
+override-dependencies = ["neo4j>=5.26.0"]
 
 # torch 固定使用 PyTorch 官方 CPU 源（避免在 linux/x86_64 上拉取 NVIDIA CUDA 包）
 [[tool.uv.index]]

@@ -1,6 +1,6 @@
-"""Zep Graph 分页读取工具。
+"""图谱分页读取工具（Graphiti/FalkorDB，自托管）。
 
-Zep 的 node/edge 列表接口使用 UUID cursor 分页，
+node/edge 列表接口使用 UUID cursor 分页，
 本模块封装自动翻页逻辑（含单页重试），对调用方透明地返回完整列表。
 """
 
@@ -10,8 +10,8 @@ import time
 from collections.abc import Callable
 from typing import Any
 
-from zep_cloud import InternalServerError
-from zep_cloud.client import Zep
+from .graphiti_adapter import InternalServerError
+from .graphiti_adapter import GraphitiClient as Zep
 
 from .logger import get_logger
 

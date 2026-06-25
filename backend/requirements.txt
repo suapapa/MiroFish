@@ -13,8 +13,9 @@ flask-cors>=6.0.0
 # OpenAI SDK（统一使用 OpenAI 格式调用 LLM）
 openai>=1.0.0
 
-# ============= Zep Cloud =============
-zep-cloud==3.13.0
+# ============= 知识图谱（Graphiti + FalkorDB，自托管，替代 Zep Cloud） =============
+# Graphiti 时序知识图谱引擎（含 FalkorDB 驱动）
+graphiti-core[falkordb]>=0.23.0
 
 # ============= OASIS 社交媒体模拟 =============
 # OASIS 社交模拟框架

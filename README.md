@@ -122,10 +122,23 @@ LLM_API_KEY=your_api_key
 LLM_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 LLM_MODEL_NAME=qwen-plus
 
-# Zep Cloud Configuration
-# Free monthly quota is sufficient for simple usage: https://app.getzep.com/
-ZEP_API_KEY=your_zep_api_key
+# Knowledge graph: Graphiti + FalkorDB (self-hosted, replaces Zep Cloud)
+# With docker-compose, FalkorDB starts automatically and the backend is wired to it.
+# For local (non-docker) runs, start FalkorDB yourself:
+#   docker run -p 6379:6379 falkordb/falkordb
+GRAPH_DB_HOST=localhost
+GRAPH_DB_PORT=6379
+GRAPH_DB_NAME=mirofish
+
+# Embeddings (Graphiti needs a vector embedder; defaults reuse the LLM creds).
+# EMBEDDER_DIM must match the model: OpenAI text-embedding-3-small=1536, Alibaba text-embedding-v3=1024
+EMBEDDER_MODEL_NAME=text-embedding-3-small
+EMBEDDER_DIM=1536
 ```
+
+> Note: The knowledge graph is now fully self-hosted via **FalkorDB + Graphiti**.
+> No external Zep Cloud account/API key is required. When using `docker compose up`,
+> the `falkordb` service is started and persisted automatically.
 
 #### 2. Install Dependencies
 

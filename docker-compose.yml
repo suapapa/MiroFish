@@ -1,4 +1,23 @@
 services:
+  # Knowledge graph store: FalkorDB (Redis-based graph DB) powering Graphiti.
+  # Replaces the former Zep Cloud dependency so the stack is fully self-hosted.
+  falkordb:
+    image: falkordb/falkordb:latest
+    container_name: mirofish-falkordb
+    restart: unless-stopped
+    # Persist graph data across restarts
+    volumes:
+      - falkordb-data:/data
+    # Optional: expose the FalkorDB Browser UI / port on the host for debugging.
+    # The backend reaches it over the internal compose network, so publishing is not required.
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   # Backend: gunicorn WSGI service (exposed only on the internal network, not published directly)
   backend:
     build:
@@ -19,6 +38,12 @@ services:
       - GUNICORN_WORKERS=4
       - GUNICORN_THREADS=2
       - GUNICORN_TIMEOUT=600
+      # Graph store connection (overrides .env so it always points at the compose service)
+      - GRAPH_DB_HOST=falkordb
+      - GRAPH_DB_PORT=6379
+    depends_on:
+      falkordb:
+        condition: service_healthy
     restart: unless-stopped
     volumes:
       - ./backend/uploads:/app/backend/uploads
@@ -47,3 +72,7 @@ services:
     restart: unless-stopped
     ports:
       - "3000:3000"
+
+volumes:
+  # Persistent storage for the FalkorDB knowledge graph
+  falkordb-data:
