@@ -442,6 +442,32 @@ const graphSvg = ref(null)
 
 // 轮询定时器
 let pollTimer = null
+let graphPollTimer = null
+let currentGraphId = null
+let isTaskStatusRequestInFlight = false
+let isGraphDataRequestInFlight = false
+
+const syncProjectData = (project) => {
+  projectData.value = project
+  if (project?.graph_id) {
+    currentGraphId = project.graph_id
+  }
+}
+
+const syncGraphId = (graphId) => {
+  if (!graphId) {
+    return
+  }
+
+  currentGraphId = graphId
+
+  if (projectData.value && projectData.value.graph_id !== graphId) {
+    projectData.value = {
+      ...projectData.value,
+      graph_id: graphId
+    }
+  }
+}
 
 // 计算属性
 const statusClass = computed(() => {
@@ -625,7 +651,7 @@ const loadProject = async () => {
     const response = await getProject(currentProjectId.value)
     
     if (response.success) {
-      projectData.value = response.data
+      syncProjectData(response.data)
       updatePhaseByStatus(response.data.status)
       
       // 自动开始图谱构建
@@ -707,17 +733,18 @@ const startBuildGraph = async () => {
   }
 }
 
-// 图谱数据轮询定时器
-let graphPollTimer = null
-
 // 启动图谱数据轮询
 const startGraphPolling = () => {
+  if (graphPollTimer) {
+    clearInterval(graphPollTimer)
+  }
+
   // 立即获取一次
-  fetchGraphData()
+  void fetchGraphData()
   
   // 每 10 秒自动获取一次图谱数据
-  graphPollTimer = setInterval(async () => {
-    await fetchGraphData()
+  graphPollTimer = setInterval(() => {
+    void fetchGraphData()
   }, 10000)
 }
 
@@ -738,55 +765,68 @@ const stopGraphPolling = () => {
 
 // 获取图谱数据
 const fetchGraphData = async () => {
+  if (isGraphDataRequestInFlight) {
+    return
+  }
+
+  const graphId = currentGraphId || projectData.value?.graph_id
+  if (!graphId) {
+    return
+  }
+
+  isGraphDataRequestInFlight = true
   try {
-    // 先获取项目信息以获取 graph_id
-    const projectResponse = await getProject(currentProjectId.value)
+    const graphResponse = await getGraphData(graphId)
     
-    if (projectResponse.success && projectResponse.data.graph_id) {
-      const graphId = projectResponse.data.graph_id
-      projectData.value = projectResponse.data
+    if (graphResponse.success && graphResponse.data) {
+      const newData = graphResponse.data
+      const newNodeCount = newData.node_count || newData.nodes?.length || 0
+      const oldNodeCount = graphData.value?.node_count || graphData.value?.nodes?.length || 0
       
-      // 获取图谱数据
-      const graphResponse = await getGraphData(graphId)
+      console.log('Fetching graph data, nodes:', newNodeCount, 'edges:', newData.edge_count || newData.edges?.length || 0)
       
-      if (graphResponse.success && graphResponse.data) {
-        const newData = graphResponse.data
-        const newNodeCount = newData.node_count || newData.nodes?.length || 0
-        const oldNodeCount = graphData.value?.node_count || graphData.value?.nodes?.length || 0
-        
-        console.log('Fetching graph data, nodes:', newNodeCount, 'edges:', newData.edge_count || newData.edges?.length || 0)
-        
-        // 数据有变化时更新渲染
-        if (newNodeCount !== oldNodeCount || !graphData.value) {
-          graphData.value = newData
-          await nextTick()
-          renderGraph()
-        }
+      // 数据有变化时更新渲染
+      if (newNodeCount !== oldNodeCount || !graphData.value) {
+        graphData.value = newData
+        await nextTick()
+        renderGraph()
       }
     }
   } catch (err) {
     console.log('Graph data fetch:', err.message || 'not ready')
+  } finally {
+    isGraphDataRequestInFlight = false
   }
 }
 
 // 轮询任务状态
 const startPollingTask = (taskId) => {
+  if (pollTimer) {
+    clearInterval(pollTimer)
+  }
+
   // 立即执行一次查询
-  pollTaskStatus(taskId)
+  void pollTaskStatus(taskId)
   
   // 然后定时轮询
   pollTimer = setInterval(() => {
-    pollTaskStatus(taskId)
+    void pollTaskStatus(taskId)
   }, 2000)
 }
 
 // 查询任务状态
 const pollTaskStatus = async (taskId) => {
+  if (isTaskStatusRequestInFlight) {
+    return
+  }
+
+  isTaskStatusRequestInFlight = true
   try {
     const response = await getTaskStatus(taskId)
     
     if (response.success) {
       const task = response.data
+      syncGraphId(task.result?.graph_id || task.metadata?.graph_id)
       
       // 更新进度显示
       buildProgress.value = {
@@ -809,13 +849,26 @@ const pollTaskStatus = async (taskId) => {
           message: '构建完成，正在加载图谱...'
         }
         
-        // 重新加载项目数据获取 graph_id
-        const projectResponse = await getProject(currentProjectId.value)
-        if (projectResponse.success) {
-          projectData.value = projectResponse.data
-          
-          // 最终加载完整图谱数据
-          if (projectResponse.data.graph_id) {
+        const completedGraphId = task.result?.graph_id || currentGraphId || projectData.value?.graph_id
+
+        if (projectData.value) {
+          projectData.value = {
+            ...projectData.value,
+            status: 'graph_completed',
+            graph_id: completedGraphId || projectData.value.graph_id,
+            graph_build_task_id: taskId
+          }
+        }
+
+        if (completedGraphId) {
+          console.log('📊 加载完整图谱:', completedGraphId)
+          await loadGraph(completedGraphId)
+          console.log('✅ 图谱加载完成')
+        } else {
+          const projectResponse = await getProject(currentProjectId.value)
+          if (projectResponse.success && projectResponse.data.graph_id) {
+            syncProjectData(projectResponse.data)
+            
             console.log('📊 加载完整图谱:', projectResponse.data.graph_id)
             await loadGraph(projectResponse.data.graph_id)
             console.log('✅ 图谱加载完成')
@@ -833,6 +886,8 @@ const pollTaskStatus = async (taskId) => {
     }
   } catch (err) {
     console.error('Poll task error:', err)
+  } finally {
+    isTaskStatusRequestInFlight = false
   }
 }
 
@@ -847,6 +902,7 @@ const stopPolling = () => {
 const loadGraph = async (graphId) => {
   try {
     graphLoading.value = true
+    syncGraphId(graphId)
     const response = await getGraphData(graphId)
     
     if (response.success) {

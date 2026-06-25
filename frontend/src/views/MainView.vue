@@ -113,6 +113,9 @@ const systemLogs = ref([])
 // Polling timers
 let pollTimer = null
 let graphPollTimer = null
+let currentGraphId = null
+let isTaskStatusRequestInFlight = false
+let isGraphDataRequestInFlight = false
 
 // --- Computed Layout Styles ---
 const leftPanelStyle = computed(() => {
@@ -149,6 +152,28 @@ const addLog = (msg) => {
   // Keep last 100 logs
   if (systemLogs.value.length > 100) {
     systemLogs.value.shift()
+  }
+}
+
+const syncProjectData = (project) => {
+  projectData.value = project
+  if (project?.graph_id) {
+    currentGraphId = project.graph_id
+  }
+}
+
+const syncGraphId = (graphId) => {
+  if (!graphId) {
+    return
+  }
+
+  currentGraphId = graphId
+
+  if (projectData.value && projectData.value.graph_id !== graphId) {
+    projectData.value = {
+      ...projectData.value,
+      graph_id: graphId
+    }
   }
 }
 
@@ -237,7 +262,7 @@ const loadProject = async () => {
     addLog(`Loading project ${currentProjectId.value}...`)
     const res = await getProject(currentProjectId.value)
     if (res.success) {
-      projectData.value = res.data
+      syncProjectData(res.data)
       updatePhaseByStatus(res.data.status)
       addLog(`Project loaded. Status: ${res.data.status}`)
       
@@ -295,39 +320,63 @@ const startBuildGraph = async () => {
 }
 
 const startGraphPolling = () => {
+  if (graphPollTimer) {
+    clearInterval(graphPollTimer)
+  }
   addLog('Started polling for graph data...')
-  fetchGraphData()
-  graphPollTimer = setInterval(fetchGraphData, 10000)
+  void fetchGraphData()
+  graphPollTimer = setInterval(() => {
+    void fetchGraphData()
+  }, 10000)
 }
 
 const fetchGraphData = async () => {
+  if (isGraphDataRequestInFlight) {
+    return
+  }
+
+  const graphId = currentGraphId || projectData.value?.graph_id
+  if (!graphId) {
+    return
+  }
+
+  isGraphDataRequestInFlight = true
   try {
-    // Refresh project info to check for graph_id
-    const projRes = await getProject(currentProjectId.value)
-    if (projRes.success && projRes.data.graph_id) {
-      const gRes = await getGraphData(projRes.data.graph_id)
-      if (gRes.success) {
-        graphData.value = gRes.data
-        const nodeCount = gRes.data.node_count || gRes.data.nodes?.length || 0
-        const edgeCount = gRes.data.edge_count || gRes.data.edges?.length || 0
-        addLog(`Graph data refreshed. Nodes: ${nodeCount}, Edges: ${edgeCount}`)
-      }
+    const gRes = await getGraphData(graphId)
+    if (gRes.success) {
+      graphData.value = gRes.data
+      const nodeCount = gRes.data.node_count || gRes.data.nodes?.length || 0
+      const edgeCount = gRes.data.edge_count || gRes.data.edges?.length || 0
+      addLog(`Graph data refreshed. Nodes: ${nodeCount}, Edges: ${edgeCount}`)
     }
   } catch (err) {
     console.warn('Graph fetch error:', err)
+  } finally {
+    isGraphDataRequestInFlight = false
   }
 }
 
 const startPollingTask = (taskId) => {
-  pollTaskStatus(taskId)
-  pollTimer = setInterval(() => pollTaskStatus(taskId), 2000)
+  if (pollTimer) {
+    clearInterval(pollTimer)
+  }
+  void pollTaskStatus(taskId)
+  pollTimer = setInterval(() => {
+    void pollTaskStatus(taskId)
+  }, 2000)
 }
 
 const pollTaskStatus = async (taskId) => {
+  if (isTaskStatusRequestInFlight) {
+    return
+  }
+
+  isTaskStatusRequestInFlight = true
   try {
     const res = await getTaskStatus(taskId)
     if (res.success) {
       const task = res.data
+      syncGraphId(task.result?.graph_id || task.metadata?.graph_id)
       
       // Log progress message if it changed
       if (task.message && task.message !== buildProgress.value?.message) {
@@ -341,26 +390,43 @@ const pollTaskStatus = async (taskId) => {
         stopPolling()
         stopGraphPolling() // Stop polling, do final load
         currentPhase.value = 2
-        
-        // Final load
-        const projRes = await getProject(currentProjectId.value)
-        if (projRes.success && projRes.data.graph_id) {
-            projectData.value = projRes.data
+        const completedGraphId = task.result?.graph_id || currentGraphId || projectData.value?.graph_id
+
+        if (projectData.value) {
+          projectData.value = {
+            ...projectData.value,
+            status: 'graph_completed',
+            graph_id: completedGraphId || projectData.value.graph_id,
+            graph_build_task_id: taskId
+          }
+        }
+
+        if (completedGraphId) {
+          await loadGraph(completedGraphId)
+        } else {
+          const projRes = await getProject(currentProjectId.value)
+          if (projRes.success && projRes.data.graph_id) {
+            syncProjectData(projRes.data)
             await loadGraph(projRes.data.graph_id)
+          }
         }
       } else if (task.status === 'failed') {
         stopPolling()
+        stopGraphPolling()
         error.value = task.error
         addLog(`Graph build task failed: ${task.error}`)
       }
     }
   } catch (e) {
     console.error(e)
+  } finally {
+    isTaskStatusRequestInFlight = false
   }
 }
 
 const loadGraph = async (graphId) => {
   graphLoading.value = true
+  syncGraphId(graphId)
   addLog(`Loading full graph data: ${graphId}`)
   try {
     const res = await getGraphData(graphId)
@@ -378,9 +444,10 @@ const loadGraph = async (graphId) => {
 }
 
 const refreshGraph = () => {
-  if (projectData.value?.graph_id) {
+  const graphId = currentGraphId || projectData.value?.graph_id
+  if (graphId) {
     addLog('Manual graph refresh triggered.')
-    loadGraph(projectData.value.graph_id)
+    void loadGraph(graphId)
   }
 }
 
