@@ -174,11 +174,17 @@ def _build_entity_types(ontology: Dict[str, Any]) -> Dict[str, type]:
     """从本体定义构建 Graphiti 实体类型（Pydantic BaseModel 子类）。"""
     entity_types: Dict[str, type] = {}
     for entity_def in ontology.get("entity_types", []) or []:
-        name = entity_def["name"]
+        name = (entity_def.get("name") or "").strip()
+        if not name:
+            logger.warning("跳过缺少 name 的实体类型定义")
+            continue
         description = entity_def.get("description", f"A {name} entity.")
         fields: Dict[str, Any] = {}
         for attr_def in entity_def.get("attributes", []) or []:
-            attr_name = _safe_attr_name(attr_def["name"])
+            raw_name = (attr_def.get("name") or "").strip()
+            if not raw_name:
+                continue
+            attr_name = _safe_attr_name(raw_name)
             attr_desc = attr_def.get("description", attr_name)
             fields[attr_name] = (Optional[str], Field(default=None, description=attr_desc))
         model = create_model(name, __base__=BaseModel, **fields)
@@ -192,11 +198,17 @@ def _build_edge_types(ontology: Dict[str, Any]) -> tuple[Dict[str, type], Dict[t
     edge_types: Dict[str, type] = {}
     edge_type_map: Dict[tuple, List[str]] = {}
     for edge_def in ontology.get("edge_types", []) or []:
-        name = edge_def["name"]
+        name = (edge_def.get("name") or "").strip()
+        if not name:
+            logger.warning("跳过缺少 name 的边类型定义")
+            continue
         description = edge_def.get("description", f"A {name} relationship.")
         fields: Dict[str, Any] = {}
         for attr_def in edge_def.get("attributes", []) or []:
-            attr_name = _safe_attr_name(attr_def["name"])
+            raw_name = (attr_def.get("name") or "").strip()
+            if not raw_name:
+                continue
+            attr_name = _safe_attr_name(raw_name)
             attr_desc = attr_def.get("description", attr_name)
             fields[attr_name] = (Optional[str], Field(default=None, description=attr_desc))
         model = create_model(_edge_class_name(name), __base__=BaseModel, **fields)
