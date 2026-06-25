@@ -183,6 +183,27 @@ Production hardening notes:
 - CORS is closed by default (same-origin via nginx). Override with `CORS_ORIGINS` (comma-separated, or `*`) only if you call the API cross-origin.
 - Frontend is a minified static build; tune gunicorn via `GUNICORN_WORKERS` / `GUNICORN_THREADS` / `GUNICORN_TIMEOUT`.
 
+#### GPU acceleration (optional)
+
+The backend image ships **CPU-only PyTorch** by default to keep the image small (it avoids
+multi-GB NVIDIA CUDA packages). PyTorch is only an indirect dependency (via
+`camel-oasis` → `sentence-transformers`) used for embeddings, so CPU is fine for most users.
+
+If you run on a host with an NVIDIA GPU and want acceleration:
+
+```bash
+# 1. Build the backend with a CUDA build of torch (match your CUDA: cu121 / cu124 / cu126)
+TORCH_VARIANT=cu124 docker compose build backend
+
+# 2. Install nvidia-container-toolkit on the host, then uncomment the
+#    `deploy.resources.reservations.devices` block under the backend service in docker-compose.yml
+
+# 3. Start
+docker compose up -d
+```
+
+Without these steps a CUDA image still falls back to CPU, so the lightweight CPU default is recommended unless you specifically need GPU.
+
 ## 📬 Join the Conversation
 
 <div align="center">

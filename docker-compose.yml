@@ -1,17 +1,21 @@
 services:
-  # 后端：gunicorn WSGI 服务（仅在内部网络暴露，不直接对外）
+  # Backend: gunicorn WSGI service (exposed only on the internal network, not published directly)
   backend:
     build:
       context: .
       dockerfile: backend/Dockerfile
+      args:
+        # CPU torch by default (lightweight). GPU users can set TORCH_VARIANT=cu124 etc. in .env and rebuild
+        # e.g. TORCH_VARIANT=cu124 docker compose build backend
+        TORCH_VARIANT: ${TORCH_VARIANT:-cpu}
     image: mirofish-backend:local
     container_name: mirofish-backend
     env_file:
       - .env
     environment:
-      # 生产安全默认：关闭调试器；SECRET_KEY 请在 .env 中提供
+      # Secure defaults for production: disable the debugger; provide SECRET_KEY in .env
       - FLASK_DEBUG=false
-      # gunicorn 调优（可按机器核数调整）
+      # gunicorn tuning (adjust to the machine's core count)
       - GUNICORN_WORKERS=4
       - GUNICORN_THREADS=2
       - GUNICORN_TIMEOUT=600
@@ -20,8 +24,18 @@ services:
       - ./backend/uploads:/app/backend/uploads
     expose:
       - "5001"
+    # --- Optional: enable NVIDIA GPU acceleration ---
+    # Prerequisites: 1) rebuild with TORCH_VARIANT=cuXXX  2) install nvidia-container-toolkit on the host
+    # Uncomment the block below to expose the GPU to the container:
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
 
-  # 前端：nginx 提供静态资源，并将 /api 反向代理到 backend
+  # Frontend: nginx serves static assets and reverse-proxies /api to the backend
   frontend:
     build:
       context: .

@@ -24,6 +24,9 @@ dependencies = [
     # OASIS 社交媒体模拟
     "camel-oasis==0.2.5",
     "camel-ai==0.2.78",
+    # torch 仅作为 camel-oasis -> sentence-transformers 的传递依赖被使用，
+    # 服务器部署无 GPU，固定为 CPU 版以避免拉取数 GB 的 NVIDIA CUDA 包（见 tool.uv 配置）
+    "torch>=2.0.0",
     
     # 文件处理
     "PyMuPDF>=1.24.0",
@@ -46,6 +49,15 @@ dev = [
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+# torch 固定使用 PyTorch 官方 CPU 源（避免在 linux/x86_64 上拉取 NVIDIA CUDA 包）
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu" }]
 
 [dependency-groups]
 dev = [
