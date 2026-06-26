@@ -46,7 +46,7 @@ class Project:
     
     # 配置
     simulation_requirement: Optional[str] = None
-    chunk_size: int = 500
+    chunk_size: int = 300
     chunk_overlap: int = 50
     
     # 错误信息
@@ -92,7 +92,7 @@ class Project:
             graph_id=data.get('graph_id'),
             graph_build_task_id=data.get('graph_build_task_id'),
             simulation_requirement=data.get('simulation_requirement'),
-            chunk_size=data.get('chunk_size', 500),
+            chunk_size=data.get('chunk_size', 300),
             chunk_overlap=data.get('chunk_overlap', 50),
             error=data.get('error')
         )

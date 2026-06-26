@@ -517,7 +517,7 @@ class _GraphNamespace:
                 edge_type_map=edge_type_map,
             )
 
-        result = _run_with_graphiti(_do, timeout=180.0)
+        result = _run_with_graphiti(_do, timeout=300.0)
         ep = getattr(result, 'episode', None)
         ep_uuid = getattr(ep, 'uuid', '') if ep else ''
         return _EpisodeView(uuid=ep_uuid)

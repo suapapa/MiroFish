@@ -56,7 +56,7 @@ class GraphBuilderService:
         text: str,
         ontology: Dict[str, Any],
         graph_name: str = "MiroFish Graph",
-        chunk_size: int = 500,
+        chunk_size: int = 300,
         chunk_overlap: int = 50,
         batch_size: int = 3
     ) -> str:
