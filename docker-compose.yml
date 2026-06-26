@@ -7,7 +7,7 @@ services:
     restart: unless-stopped
     # Persist graph data across restarts
     volumes:
-      - falkordb-data:/data
+      - ./mirofish-data/graph:/data
     # Optional: expose the FalkorDB Browser UI / port on the host for debugging.
     # The backend reaches it over the internal compose network, so publishing is not required.
     ports:
@@ -46,7 +46,7 @@ services:
         condition: service_healthy
     restart: unless-stopped
     volumes:
-      - ./backend/uploads:/app/backend/uploads
+      - ./mirofish-data/uploads:/app/backend/uploads
     expose:
       - "5001"
     # --- Optional: enable NVIDIA GPU acceleration ---
@@ -72,7 +72,3 @@ services:
     restart: unless-stopped
     ports:
       - "3000:3000"
-
-volumes:
-  # Persistent storage for the FalkorDB knowledge graph
-  falkordb-data:

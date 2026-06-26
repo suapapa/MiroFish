@@ -56,5 +56,5 @@ backend/logs/
 # 上传文件
 backend/uploads/
 
-# Docker 数据
-data/
+# Docker 持久化数据（compose bind mounts）
+mirofish-data/
