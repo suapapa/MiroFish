@@ -853,6 +853,32 @@ def list_simulations():
         }), 500
 
 
+def _enrich_project_only_entry(project) -> dict:
+    """为尚未创建 simulation 的项目构建历史记录条目"""
+    status = project.status.value if hasattr(project.status, 'value') else project.status
+    return {
+        "simulation_id": None,
+        "project_id": project.project_id,
+        "project_name": project.name,
+        "project_status": status,
+        "simulation_requirement": project.simulation_requirement or "",
+        "status": status,
+        "graph_id": project.graph_id,
+        "created_at": project.created_at,
+        "updated_at": project.updated_at,
+        "current_round": 0,
+        "total_rounds": 0,
+        "runner_status": "idle",
+        "report_id": None,
+        "files": [
+            {"filename": f.get("filename", "Unknown file")}
+            for f in (project.files or [])[:3]
+        ],
+        "version": "v1.0.2",
+        "created_date": (project.created_at or "")[:10],
+    }
+
+
 def _get_report_id_for_simulation(simulation_id: str) -> str:
     """
     获取 simulation 对应的最新 report_id
@@ -951,10 +977,15 @@ def get_simulation_history():
         limit = request.args.get('limit', 20, type=int)
         
         manager = SimulationManager()
-        simulations = manager.list_simulations()[:limit]
+        simulations = sorted(
+            manager.list_simulations(),
+            key=lambda s: s.created_at,
+            reverse=True,
+        )
         
-        # 增强模拟数据，只从 Simulation 文件读取
+        # 增强模拟数据，并补充尚未创建 simulation 的项目
         enriched_simulations = []
+        simulated_project_ids = set()
         for sim in simulations:
             sim_dict = sim.to_dict()
             
@@ -1009,7 +1040,19 @@ def get_simulation_history():
             except:
                 sim_dict["created_date"] = ""
             
+            simulated_project_ids.add(sim.project_id)
             enriched_simulations.append(sim_dict)
+
+        for project in ProjectManager.list_projects(limit=limit * 2):
+            if project.project_id in simulated_project_ids:
+                continue
+            enriched_simulations.append(_enrich_project_only_entry(project))
+
+        enriched_simulations.sort(
+            key=lambda item: item.get("created_at", ""),
+            reverse=True,
+        )
+        enriched_simulations = enriched_simulations[:limit]
         
         return jsonify({
             "success": True,

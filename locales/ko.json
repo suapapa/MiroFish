@@ -314,6 +314,11 @@
     "step4Button": "분석 리포트",
     "replayHint": "3단계 '시뮬레이션 실행'과 5단계 '심층 인터랙션'은 런타임 중에만 시작할 수 있으며, 히스토리 다시 보기를 지원하지 않습니다",
     "notStarted": "시작되지 않음",
+    "statusCreated": "프로젝트 생성됨",
+    "statusOntologyGenerated": "온톨로지 생성 완료",
+    "statusGraphBuilding": "그래프 구축 중",
+    "statusGraphCompleted": "환경 설정 대기",
+    "statusFailed": "구축 실패",
     "roundsProgress": "{current}/{total} 라운드",
     "untitledSimulation": "제목 없는 시뮬레이션",
     "unknownFile": "알 수 없는 파일"

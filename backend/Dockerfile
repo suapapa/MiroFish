@@ -60,9 +60,4 @@ USER app
 EXPOSE 5001
 
 # Start the WSGI app via gunicorn (the module-level app object exposed by run.py)
-CMD ["sh", "-c", "gunicorn run:app \
-  --bind 0.0.0.0:5001 \
-  --workers ${GUNICORN_WORKERS:-4} \
-  --threads ${GUNICORN_THREADS:-2} \
-  --timeout ${GUNICORN_TIMEOUT:-600} \
-  --access-logfile - --error-logfile -"]
+CMD ["gunicorn", "run:app", "-c", "gunicorn_conf.py"]

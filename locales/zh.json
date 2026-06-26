@@ -314,6 +314,11 @@
     "step4Button": "分析报告",
     "replayHint": "Step3「开始模拟」与 Step5「深度互动」需在运行中启动，不支持历史回放",
     "notStarted": "未开始",
+    "statusCreated": "项目已创建",
+    "statusOntologyGenerated": "本体已生成",
+    "statusGraphBuilding": "图谱构建中",
+    "statusGraphCompleted": "待环境搭建",
+    "statusFailed": "构建失败",
     "roundsProgress": "{current}/{total} 轮",
     "untitledSimulation": "未命名模拟",
     "unknownFile": "未知文件"

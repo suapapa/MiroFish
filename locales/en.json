@@ -314,6 +314,11 @@
     "step4Button": "Analysis Report",
     "replayHint": "Step 3 'Run Simulation' and Step 5 'Deep Interaction' must be started during runtime and do not support history replay",
     "notStarted": "Not started",
+    "statusCreated": "Project created",
+    "statusOntologyGenerated": "Ontology generated",
+    "statusGraphBuilding": "Graph building",
+    "statusGraphCompleted": "Awaiting env setup",
+    "statusFailed": "Build failed",
     "roundsProgress": "{current}/{total} rounds",
     "untitledSimulation": "Untitled simulation",
     "unknownFile": "Unknown file"

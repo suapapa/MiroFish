@@ -21,7 +21,7 @@
     <div v-if="projects.length > 0" class="cards-container" :class="{ expanded: isExpanded }" :style="containerStyle">
       <div 
         v-for="(project, index) in projects" 
-        :key="project.simulation_id"
+        :key="project.simulation_id || project.project_id"
         class="project-card"
         :class="{ expanded: isExpanded, hovering: hoveringCard === index }"
         :style="getCardStyle(index)"
@@ -31,7 +31,7 @@
       >
         <!-- 卡片头部：simulation_id 和 功能可用状态 -->
         <div class="card-header">
-          <span class="card-id">{{ formatSimulationId(project.simulation_id) }}</span>
+          <span class="card-id">{{ formatEntryId(project) }}</span>
           <div class="card-status-icons">
             <span 
               class="status-icon" 
@@ -39,7 +39,8 @@
               :title="$t('history.graphBuild')"
             >◇</span>
             <span 
-              class="status-icon available" 
+              class="status-icon" 
+              :class="{ available: project.simulation_id, unavailable: !project.simulation_id }"
               :title="$t('history.envSetup')"
             >◈</span>
             <span 
@@ -113,7 +114,7 @@
             <!-- 弹窗头部 -->
             <div class="modal-header">
               <div class="modal-title-section">
-                <span class="modal-id">{{ formatSimulationId(selectedProject.simulation_id) }}</span>
+                <span class="modal-id">{{ formatEntryId(selectedProject) }}</span>
                 <span class="modal-progress" :class="getProgressClass(selectedProject)">
                   <span class="status-dot">●</span> {{ formatRounds(selectedProject) }}
                 </span>
@@ -164,6 +165,7 @@
               <button 
                 class="modal-btn btn-simulation" 
                 @click="goToSimulation"
+                :disabled="!selectedProject.simulation_id"
               >
                 <span class="btn-step">Step2</span>
                 <span class="btn-icon">◈</span>
@@ -292,6 +294,13 @@ const getCardStyle = (index) => {
 
 // 根据轮数进度获取样式类
 const getProgressClass = (simulation) => {
+  if (!simulation.simulation_id && simulation.project_status) {
+    if (simulation.project_status === 'failed') return 'not-started'
+    if (simulation.project_status === 'graph_building') return 'in-progress'
+    if (simulation.project_status === 'graph_completed') return 'not-started'
+    return 'not-started'
+  }
+
   const current = simulation.current_round || 0
   const total = simulation.total_rounds || 0
   
@@ -351,8 +360,31 @@ const formatSimulationId = (simulationId) => {
   return `SIM_${prefix.toUpperCase()}`
 }
 
+// 格式化历史条目 ID（simulation 或 project）
+const formatEntryId = (entry) => {
+  if (entry?.simulation_id) {
+    return formatSimulationId(entry.simulation_id)
+  }
+  if (entry?.project_id) {
+    const prefix = entry.project_id.replace('proj_', '').slice(0, 6)
+    return `PROJ_${prefix.toUpperCase()}`
+  }
+  return 'PROJ_UNKNOWN'
+}
+
 // 格式化轮数显示（当前轮/总轮数）
 const formatRounds = (simulation) => {
+  if (!simulation.simulation_id && simulation.project_status) {
+    const statusLabels = {
+      created: t('history.statusCreated'),
+      ontology_generated: t('history.statusOntologyGenerated'),
+      graph_building: t('history.statusGraphBuilding'),
+      graph_completed: t('history.statusGraphCompleted'),
+      failed: t('history.statusFailed'),
+    }
+    return statusLabels[simulation.project_status] || t('history.notStarted')
+  }
+
   const current = simulation.current_round || 0
   const total = simulation.total_rounds || 0
   if (total === 0) return t('history.notStarted')
