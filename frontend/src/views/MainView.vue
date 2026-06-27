@@ -392,9 +392,25 @@ const fetchGraphData = async () => {
     // 구축 중에는 캐시를 우회해 FalkorDB 최신 노드/엣지를 반영
     const gRes = await getGraphData(graphId, { refresh: currentPhase.value === 1 })
     if (gRes.success) {
-      graphData.value = gRes.data
       const nodeCount = gRes.data.node_count || gRes.data.nodes?.length || 0
       const edgeCount = gRes.data.edge_count || gRes.data.edges?.length || 0
+      const prevNodeCount = graphData.value?.node_count || graphData.value?.nodes?.length || 0
+
+      // 구축 중 일시적 빈 응답은 UI를 지우지 않음 (FalkorDB/Graphiti 쓰기 경합)
+      if (currentPhase.value === 1 && prevNodeCount > 0 && nodeCount === 0) {
+        addLog(`Graph refresh skipped (transient empty response while building)`)
+        return
+      }
+
+      const prevEdgeCount = graphData.value?.edge_count || graphData.value?.edges?.length || 0
+      const shouldUpdate =
+        !graphData.value ||
+        nodeCount !== prevNodeCount ||
+        edgeCount !== prevEdgeCount
+
+      if (shouldUpdate) {
+        graphData.value = gRes.data
+      }
       addLog(`Graph data refreshed. Nodes: ${nodeCount}, Edges: ${edgeCount}`)
     }
   } catch (err) {

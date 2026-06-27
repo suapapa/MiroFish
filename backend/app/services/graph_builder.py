@@ -453,6 +453,18 @@ class GraphBuilderService:
             "node_count": len(nodes_data),
             "edge_count": len(edges_data),
         }
+
+        # 구축 중 FalkorDB 조회가 일시적으로 빈 결과를 줄 수 있음 — 기존 캐시를 덮어쓰지 않음
+        if len(nodes_data) == 0:
+            existing = load_graph_cache(graph_id)
+            existing_nodes = existing.get("node_count", len(existing.get("nodes", []))) if existing else 0
+            if existing_nodes > 0:
+                logger.warning(
+                    f"Live fetch returned empty graph but cache has {existing_nodes} nodes "
+                    f"(graph={graph_id}); keeping cached snapshot"
+                )
+                return existing
+
         save_graph_cache(graph_id, result)
         return result
     

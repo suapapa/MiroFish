@@ -789,12 +789,26 @@ const fetchGraphData = async () => {
       const oldNodeCount = graphData.value?.node_count || graphData.value?.nodes?.length || 0
       
       console.log('Fetching graph data, nodes:', newNodeCount, 'edges:', newData.edge_count || newData.edges?.length || 0)
+
+      if (currentPhase.value === 1 && oldNodeCount > 0 && newNodeCount === 0) {
+        console.log('Skipping transient empty graph snapshot during build')
+        return
+      }
       
       // 数据有变化时更新渲染
       if (newNodeCount !== oldNodeCount || !graphData.value) {
         graphData.value = newData
         await nextTick()
         renderGraph()
+      } else if (newNodeCount > 0) {
+        // 노드 수는 같아도 엣지가 늘었을 수 있음
+        const newEdgeCount = newData.edge_count || newData.edges?.length || 0
+        const oldEdgeCount = graphData.value?.edge_count || graphData.value?.edges?.length || 0
+        if (newEdgeCount !== oldEdgeCount) {
+          graphData.value = newData
+          await nextTick()
+          renderGraph()
+        }
       }
     }
   } catch (err) {

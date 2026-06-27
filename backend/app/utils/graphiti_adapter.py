@@ -23,6 +23,7 @@ import os
 import json
 import asyncio
 import threading
+import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
@@ -45,6 +46,38 @@ def _empty_list_if_not_found(exc: Exception, resource: str) -> Optional[List[Any
     if f"no {resource} found" in message:
         return []
     return None
+
+
+def _fetch_group_items_with_retry(
+    fetch_coro_factory,
+    resource: str,
+    graph_id: str,
+    view_factory,
+    max_attempts: int = 3,
+    retry_delay: float = 1.0,
+) -> List[Any]:
+    """group 查询；'not found' 在写入 중可能是瞬态空结果，短暂重试后再视为空。"""
+    last_exc: Exception | None = None
+
+    for attempt in range(max_attempts):
+        try:
+            items = _run_with_graphiti(fetch_coro_factory)
+            return view_factory(items or [])
+        except Exception as e:
+            if _empty_list_if_not_found(e, resource) is None:
+                raise InternalServerError(str(e)) from e
+            last_exc = e
+            if attempt < max_attempts - 1:
+                logger.debug(
+                    f"Transient empty {resource} for graph={graph_id}, "
+                    f"retry {attempt + 1}/{max_attempts - 1} in {retry_delay:.1f}s"
+                )
+                time.sleep(retry_delay)
+
+    logger.debug(
+        f"No {resource} found for graph={graph_id} after {max_attempts} attempts: {last_exc}"
+    )
+    return []
 
 
 # ── 与 zep_cloud 兼容的数据载体 ──
@@ -434,14 +467,12 @@ class _NodeNamespace:
                 g.driver, [graph_id], limit=limit, uuid_cursor=uuid_cursor
             )
 
-        try:
-            nodes = _run_with_graphiti(_do)
-        except Exception as e:
-            empty = _empty_list_if_not_found(e, "nodes")
-            if empty is not None:
-                return empty
-            raise InternalServerError(str(e)) from e
-        return [_NodeView(n) for n in (nodes or [])]
+        return _fetch_group_items_with_retry(
+            _do,
+            resource="nodes",
+            graph_id=graph_id,
+            view_factory=lambda nodes: [_NodeView(n) for n in nodes],
+        )
 
     def get(self, uuid_: str = '', **kwargs) -> Optional[_NodeView]:
         from graphiti_core.nodes import EntityNode
@@ -479,14 +510,12 @@ class _EdgeNamespace:
                 g.driver, [graph_id], limit=limit, uuid_cursor=uuid_cursor
             )
 
-        try:
-            edges = _run_with_graphiti(_do)
-        except Exception as e:
-            empty = _empty_list_if_not_found(e, "edges")
-            if empty is not None:
-                return empty
-            raise InternalServerError(str(e)) from e
-        return [_EdgeView(e) for e in (edges or [])]
+        return _fetch_group_items_with_retry(
+            _do,
+            resource="edges",
+            graph_id=graph_id,
+            view_factory=lambda edges: [_EdgeView(e) for e in edges],
+        )
 
 
 class _GraphNamespace:
