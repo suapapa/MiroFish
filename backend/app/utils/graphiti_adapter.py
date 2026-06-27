@@ -39,6 +39,14 @@ class InternalServerError(Exception):
     """图存储端瞬态错误（兼容原 zep_cloud.InternalServerError 的重试语义）。"""
 
 
+def _empty_list_if_not_found(exc: Exception, resource: str) -> Optional[List[Any]]:
+    """Graphiti(FalkorDB) 在无节点/边时抛错；构建早期应视为空结果而非失败。"""
+    message = str(exc).lower()
+    if f"no {resource} found" in message:
+        return []
+    return None
+
+
 # ── 与 zep_cloud 兼容的数据载体 ──
 class EpisodeData:
     """对应 zep_cloud.EpisodeData：一段待写入图谱的文本。"""
@@ -429,6 +437,9 @@ class _NodeNamespace:
         try:
             nodes = _run_with_graphiti(_do)
         except Exception as e:
+            empty = _empty_list_if_not_found(e, "nodes")
+            if empty is not None:
+                return empty
             raise InternalServerError(str(e)) from e
         return [_NodeView(n) for n in (nodes or [])]
 
@@ -471,6 +482,9 @@ class _EdgeNamespace:
         try:
             edges = _run_with_graphiti(_do)
         except Exception as e:
+            empty = _empty_list_if_not_found(e, "edges")
+            if empty is not None:
+                return empty
             raise InternalServerError(str(e)) from e
         return [_EdgeView(e) for e in (edges or [])]
 
