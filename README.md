@@ -121,6 +121,8 @@ cp .env.example .env
 LLM_API_KEY=your_api_key
 LLM_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 LLM_MODEL_NAME=qwen-plus
+# Optional: dedicated model for Graphiti graph build (defaults to LLM_MODEL_NAME)
+# GRAPHITI_LLM_MODEL_NAME=qwen-turbo
 
 # Knowledge graph: Graphiti + FalkorDB (self-hosted, replaces Zep Cloud)
 # With docker-compose, FalkorDB starts automatically and the backend is wired to it.

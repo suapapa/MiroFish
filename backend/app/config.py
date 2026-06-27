@@ -41,8 +41,8 @@ class Config:
     LLM_API_KEY = os.environ.get('LLM_API_KEY')
     LLM_BASE_URL = os.environ.get('LLM_BASE_URL', 'https://api.openai.com/v1')
     LLM_MODEL_NAME = os.environ.get('LLM_MODEL_NAME', 'gpt-4o-mini')
-    # Graphiti 抽取阶段使用的小模型（可选，默认与主模型一致）
-    LLM_SMALL_MODEL_NAME = os.environ.get('LLM_SMALL_MODEL_NAME', '') or LLM_MODEL_NAME
+    # Graphiti 知识图谱专用 LLM（抽取、dedup、timestamp 等全部使用；未设置则复用 LLM_MODEL_NAME）
+    GRAPHITI_LLM_MODEL_NAME = os.environ.get('GRAPHITI_LLM_MODEL_NAME', '') or LLM_MODEL_NAME
 
     # Graphiti 使用的 LLM 客户端类型（决定如何向模型请求结构化输出）：
     #   - 'generic'(默认): graphiti.OpenAIGenericClient，走标准 /chat/completions，

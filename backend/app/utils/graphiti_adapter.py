@@ -375,11 +375,12 @@ def _create_graphiti():
         database=Config.GRAPH_DB_NAME,
     )
 
+    graphiti_model = Config.GRAPHITI_LLM_MODEL_NAME
     llm_config = LLMConfig(
         api_key=Config.LLM_API_KEY,
         base_url=Config.LLM_BASE_URL,
-        model=Config.LLM_MODEL_NAME,
-        small_model=Config.LLM_SMALL_MODEL_NAME,
+        model=graphiti_model,
+        small_model=graphiti_model,
     )
 
     # 选择 LLM 客户端：
