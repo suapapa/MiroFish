@@ -1,6 +1,6 @@
 """
-图谱构建服务
-接口2：使用 Graphiti(FalkorDB) 构建知识图谱（自托管，替代 Zep Cloud）
+Graph build service
+API 2: Build knowledge graph with Graphiti (FalkorDB), self-hosted (replaces Zep Cloud)
 """
 
 import os
@@ -24,7 +24,7 @@ logger = get_logger('mirofish.graph_builder')
 
 @dataclass
 class GraphInfo:
-    """图谱信息"""
+    """Graph metadata"""
     graph_id: str
     node_count: int
     edge_count: int
@@ -41,12 +41,12 @@ class GraphInfo:
 
 class GraphBuilderService:
     """
-    图谱构建服务
-    负责调用Zep API构建知识图谱
+    Graph build service
+    Calls Zep-compatible API to build the knowledge graph
     """
     
     def __init__(self, api_key: Optional[str] = None):
-        # api_key 仅为兼容旧签名保留；自托管 Graphiti(FalkorDB) 不需要
+        # api_key kept for backward-compatible signature; self-hosted Graphiti(FalkorDB) does not need it
         self.api_key = api_key
         self.client = Zep(api_key=self.api_key)
         self.task_manager = TaskManager()
@@ -61,20 +61,20 @@ class GraphBuilderService:
         batch_size: int = Config.DEFAULT_GRAPH_BUILD_BATCH_SIZE
     ) -> str:
         """
-        异步构建图谱
-        
+        Build graph asynchronously
+
         Args:
-            text: 输入文本
-            ontology: 本体定义（来自接口1的输出）
-            graph_name: 图谱名称
-            chunk_size: 文本块大小
-            chunk_overlap: 块重叠大小
-            batch_size: 每批发送的块数量
-            
+            text: Input text
+            ontology: Ontology definition (from API 1 output)
+            graph_name: Graph name
+            chunk_size: Text chunk size
+            chunk_overlap: Chunk overlap size
+            batch_size: Chunks per batch
+
         Returns:
-            任务ID
+            Task ID
         """
-        # 创建任务
+        # Create task
         task_id = self.task_manager.create_task(
             task_type="graph_build",
             metadata={
@@ -87,7 +87,7 @@ class GraphBuilderService:
         # Capture locale before spawning background thread
         current_locale = get_locale()
 
-        # 在后台线程中执行构建
+        # Run build in background thread
         thread = threading.Thread(
             target=self._build_graph_worker,
             args=(task_id, text, ontology, graph_name, chunk_size, chunk_overlap, batch_size, current_locale)
@@ -108,7 +108,7 @@ class GraphBuilderService:
         batch_size: int,
         locale: str = 'zh'
     ):
-        """图谱构建工作线程"""
+        """Graph build worker thread"""
         set_locale(locale)
         try:
             self.task_manager.update_task(
@@ -118,7 +118,7 @@ class GraphBuilderService:
                 message=t('progress.startBuildingGraph')
             )
             
-            # 1. 创建图谱
+            # 1. Create graph
             graph_id = self.create_graph(graph_name)
             self.task_manager.update_task(
                 task_id,
@@ -126,7 +126,7 @@ class GraphBuilderService:
                 message=t('progress.graphCreated', graphId=graph_id)
             )
             
-            # 2. 设置本体
+            # 2. Set ontology
             self.set_ontology(graph_id, ontology)
             self.task_manager.update_task(
                 task_id,
@@ -134,7 +134,7 @@ class GraphBuilderService:
                 message=t('progress.ontologySet')
             )
             
-            # 3. 文本分块
+            # 3. Split text into chunks
             chunks = TextProcessor.split_text(text, chunk_size, chunk_overlap)
             total_chunks = len(chunks)
             self.task_manager.update_task(
@@ -143,7 +143,7 @@ class GraphBuilderService:
                 message=t('progress.textSplit', count=total_chunks)
             )
             
-            # 4. 分批发送数据
+            # 4. Send data in batches
             episode_uuids = self.add_text_batches(
                 graph_id, chunks, batch_size,
                 lambda msg, prog: self.task_manager.update_task(
@@ -153,7 +153,7 @@ class GraphBuilderService:
                 )
             )
             
-            # 5. 等待Zep处理完成
+            # 5. Wait for Zep/Graphiti processing
             self.task_manager.update_task(
                 task_id,
                 progress=60,
@@ -169,7 +169,7 @@ class GraphBuilderService:
                 )
             )
             
-            # 6. 获取图谱信息
+            # 6. Fetch graph info
             self.task_manager.update_task(
                 task_id,
                 progress=90,
@@ -178,7 +178,7 @@ class GraphBuilderService:
             
             graph_info = self._get_graph_info(graph_id)
             
-            # 完成
+            # Complete
             self.task_manager.complete_task(task_id, {
                 "graph_id": graph_id,
                 "graph_info": graph_info.to_dict(),
@@ -191,7 +191,7 @@ class GraphBuilderService:
             self.task_manager.fail_task(task_id, error_msg)
     
     def create_graph(self, name: str) -> str:
-        """创建Zep图谱（公开方法）"""
+        """Create Zep/Graphiti graph (public API)"""
         graph_id = f"mirofish_{uuid.uuid4().hex[:16]}"
         
         self.client.graph.create(
@@ -203,10 +203,10 @@ class GraphBuilderService:
         return graph_id
     
     def set_ontology(self, graph_id: str, ontology: Dict[str, Any]):
-        """设置图谱本体（公开方法）
+        """Set graph ontology (public API)
 
-        将本体定义（实体/边类型）按 graph_id 持久化；Graphiti 在写入每个
-        episode 时据此构建抽取所需的 Pydantic 模型与 edge_type_map。
+        Persists entity/edge type definitions per graph_id; Graphiti builds Pydantic
+        models and edge_type_map from them on each episode write.
         """
         self.client.graph.set_ontology(graph_ids=[graph_id], ontology=ontology)
     
@@ -217,7 +217,7 @@ class GraphBuilderService:
         batch_size: int = Config.DEFAULT_GRAPH_BUILD_BATCH_SIZE,
         progress_callback: Optional[Callable] = None
     ) -> List[str]:
-        """分批添加文本到图谱，返回所有 episode 的 uuid 列表"""
+        """Add text to graph in batches; return all episode UUIDs"""
         episode_uuids = []
         total_chunks = len(chunks)
         
@@ -233,13 +233,13 @@ class GraphBuilderService:
                     progress
                 )
             
-            # 构建episode数据
+            # Build episode payloads
             episodes = [
                 EpisodeData(data=chunk, type="text")
                 for chunk in batch_chunks
             ]
             
-            # 发送到Zep（带重试）
+            # Send to Zep (with retry)
             max_batch_retries = 3
             batch_result = None
             last_batch_error = None
@@ -277,14 +277,14 @@ class GraphBuilderService:
             if last_batch_error:
                 raise last_batch_error
 
-            # 收集返回的 episode uuid
+            # Collect returned episode UUIDs
             if batch_result and isinstance(batch_result, list):
                 for ep in batch_result:
                     ep_uuid = getattr(ep, 'uuid_', None) or getattr(ep, 'uuid', None)
                     if ep_uuid:
                         episode_uuids.append(ep_uuid)
 
-            # 避免请求过快
+            # Avoid sending requests too fast
             time.sleep(1)
         
         return episode_uuids
@@ -295,7 +295,7 @@ class GraphBuilderService:
         progress_callback: Optional[Callable] = None,
         timeout: int = 600
     ):
-        """等待所有 episode 处理完成（通过查询每个 episode 的 processed 状态）"""
+        """Wait until all episodes are processed (poll each episode's processed flag)"""
         if not episode_uuids:
             if progress_callback:
                 progress_callback(t('progress.noEpisodesWait'), 1.0)
@@ -318,7 +318,7 @@ class GraphBuilderService:
                     )
                 break
             
-            # 检查每个 episode 的处理状态
+            # Check processing status for each episode
             for ep_uuid in list(pending_episodes):
                 try:
                     episode = self.client.graph.episode.get(uuid_=ep_uuid)
@@ -329,7 +329,7 @@ class GraphBuilderService:
                         completed_count += 1
                         
                 except Exception as e:
-                    # 忽略单个查询错误，继续
+                    # Ignore single-query errors and continue
                     pass
             
             elapsed = int(time.time() - start_time)
@@ -340,20 +340,20 @@ class GraphBuilderService:
                 )
             
             if pending_episodes:
-                time.sleep(3)  # 每3秒检查一次
+                time.sleep(3)  # Poll every 3 seconds
         
         if progress_callback:
             progress_callback(t('progress.processingComplete', completed=completed_count, total=total_episodes), 1.0)
     
     def _get_graph_info(self, graph_id: str) -> GraphInfo:
-        """获取图谱信息"""
-        # 获取节点（分页）
+        """Fetch graph summary info"""
+        # Fetch nodes (paginated)
         nodes = fetch_all_nodes(self.client, graph_id)
 
-        # 获取边（分页）
+        # Fetch edges (paginated)
         edges = fetch_all_edges(self.client, graph_id)
 
-        # 统计实体类型
+        # Collect entity type labels
         entity_types = set()
         for node in nodes:
             if node.labels:
@@ -370,14 +370,14 @@ class GraphBuilderService:
     
     def get_graph_data(self, graph_id: str, use_cache: bool = True) -> Dict[str, Any]:
         """
-        获取完整图谱数据（包含详细信息）
-        
+        Fetch full graph data (detailed)
+
         Args:
-            graph_id: 图谱ID
-            use_cache: 是否优先读取构建时持久化的缓存
-            
+            graph_id: Graph ID
+            use_cache: Prefer cache persisted at build time
+
         Returns:
-            包含nodes和edges的字典，包括时间信息、属性等详细数据
+            Dict with nodes and edges including timestamps, attributes, etc.
         """
         from ..utils.graph_cache import load_graph_cache, save_graph_cache
 
@@ -390,14 +390,14 @@ class GraphBuilderService:
         nodes = fetch_all_nodes(self.client, graph_id)
         edges = fetch_all_edges(self.client, graph_id)
 
-        # 创建节点映射用于获取节点名称
+        # Node map for resolving names on edges
         node_map = {}
         for node in nodes:
             node_map[node.uuid_] = node.name or ""
         
         nodes_data = []
         for node in nodes:
-            # 获取创建时间
+            # Created timestamp
             created_at = getattr(node, 'created_at', None)
             if created_at:
                 created_at = str(created_at)
@@ -413,20 +413,20 @@ class GraphBuilderService:
         
         edges_data = []
         for edge in edges:
-            # 获取时间信息
+            # Temporal fields
             created_at = getattr(edge, 'created_at', None)
             valid_at = getattr(edge, 'valid_at', None)
             invalid_at = getattr(edge, 'invalid_at', None)
             expired_at = getattr(edge, 'expired_at', None)
             
-            # 获取 episodes
+            # Episodes
             episodes = getattr(edge, 'episodes', None) or getattr(edge, 'episode_ids', None)
             if episodes and not isinstance(episodes, list):
                 episodes = [str(episodes)]
             elif episodes:
                 episodes = [str(e) for e in episodes]
             
-            # 获取 fact_type
+            # fact_type
             fact_type = getattr(edge, 'fact_type', None) or edge.name or ""
             
             edges_data.append({
@@ -454,7 +454,7 @@ class GraphBuilderService:
             "edge_count": len(edges_data),
         }
 
-        # 구축 중 FalkorDB 조회가 일시적으로 빈 결과를 줄 수 있음 — 기존 캐시를 덮어쓰지 않음
+        # During build FalkorDB may briefly return empty — do not overwrite existing cache
         if len(nodes_data) == 0:
             existing = load_graph_cache(graph_id)
             existing_nodes = existing.get("node_count", len(existing.get("nodes", []))) if existing else 0
@@ -469,6 +469,5 @@ class GraphBuilderService:
         return result
     
     def delete_graph(self, graph_id: str):
-        """删除图谱"""
+        """Delete graph"""
         self.client.graph.delete(graph_id=graph_id)
-

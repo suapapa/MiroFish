@@ -1,17 +1,17 @@
 # ============================================================
-# MiroFish 백엔드 LLM 프롬프트 정의 (한국어)
+# MiroFish Backend LLM Prompt Definitions (Korean)
 # ============================================================
-# 코드에서는 app/utils/prompts.py 의 get_prompt("namespace.key") 로 로드한다.
+# Loaded in code via app/utils/prompts.py get_prompt("namespace.key").
 #
-# 주의사항:
-#  - {var} 형태는 코드에서 str.format() 으로 치환되는 placeholder 다.
-#  - {{ 와 }} 는 .format() 이후 리터럴 중괄호 { } 로 남는다 (JSON 예시 등). 수정 금지.
-#  - system prompt 중 일부는 .format() 을 거치지 않으므로 단일 중괄호 { } 가 그대로 사용된다.
-#  - 언어 지시문(get_language_instruction) 등 런타임 결합은 코드에 남아 있다.
+# Notes:
+#  - {var} placeholders are substituted in code with str.format().
+#  - {{ and }} become literal braces { } after .format() (e.g. JSON examples). Do not change.
+#  - Some system prompts are NOT passed through .format(), so single braces { } are used literally there.
+#  - Runtime combinations such as the language instruction (get_language_instruction) remain in code.
 # ============================================================
 
 report_agent:
-  # ── 도구 설명 ──
+  # ── Tool descriptions ──
   tool_desc_insight_forge: |-
     【심층 인사이트 검색 - 강력한 검색 도구】
     이것은 심층 분석을 위해 설계된 우리의 강력한 검색 함수다. 이 도구는:
@@ -86,7 +86,7 @@ report_agent:
 
     【중요】이 기능을 사용하려면 OASIS 시뮬레이션 환경이 실행 중이어야 한다!
 
-  # ── 개요 기획 prompt ──
+  # ── Outline planning prompt ──
   plan_system: |-
     너는 「미래 예측 보고서」 작성 전문가로서, 시뮬레이션 세계에 대한 「신의 시점」을 가지고 있다 — 시뮬레이션 속 모든 Agent의 행동, 발언, 상호작용을 꿰뚫어 볼 수 있다.
 
@@ -148,7 +148,7 @@ report_agent:
 
     【재차 알림】보고서 챕터 수: 최소 2개, 최대 5개, 내용은 정제하여 핵심 예측 발견에 집중한다.
 
-  # ── 챕터 생성 prompt ──
+  # ── Section generation prompt ──
   section_system: |-
     너는 「미래 예측 보고서」 작성 전문가로서, 지금 보고서의 한 챕터를 작성하고 있다.
 
@@ -328,7 +328,7 @@ report_agent:
     2. 그다음 도구(Action)를 호출하여 시뮬레이션 데이터를 확보하라
     3. 충분한 정보를 수집한 후 Final Answer(순수 본문, 어떤 제목도 없음)를 출력하라
 
-  # ── ReACT 루프 내 메시지 템플릿 ──
+  # ── Message templates inside the ReACT loop ──
   react_observation: |-
     Observation(검색 결과):
 
@@ -384,7 +384,7 @@ report_agent:
 
 
 ontology:
-  # 온톨로지 생성 시스템 프롬프트
+  # Ontology generation system prompt
   system: |
     너는 전문 지식 그래프 온톨로지 설계 전문가다. 너의 임무는 주어진 텍스트 내용과 시뮬레이션 요구사항을 분석하여, **소셜미디어 여론 시뮬레이션**에 적합한 엔티티 유형과 관계 유형을 설계하는 것이다.
 
@@ -530,10 +530,10 @@ ontology:
     - COLLABORATES_WITH: 협력
     - COMPETES_WITH: 경쟁
 
-  # system 프롬프트 뒤에 언어 지시문과 함께 덧붙는 영어 강제 지시문
+  # English enforcement instruction appended after the system prompt along with the language instruction
   system_suffix: "IMPORTANT: Entity type names MUST be in English PascalCase (e.g., 'PersonEntity', 'MediaOrganization'). Relationship type names MUST be in English UPPER_SNAKE_CASE (e.g., 'WORKS_FOR'). Attribute names MUST be in English snake_case. Only description fields and analysis_summary should use the specified language above."
 
-  # 사용자 메시지 본문 (trailing newline 포함)
+  # User message body (includes trailing newline)
   user_main: |
     ## 시뮬레이션 요구사항
 
@@ -543,13 +543,13 @@ ontology:
 
     {combined_text}
 
-  # 추가 컨텍스트 블록 (코드에서 앞에 \n 을 붙여 사용)
+  # Additional context block (prefixed with \n in code)
   user_additional: |
     ## 추가 설명
 
     {additional_context}
 
-  # 마무리 규칙 블록 (코드에서 앞에 \n 을 붙여 사용)
+  # Closing rules block (prefixed with \n in code)
   user_footer: |
     위 내용에 따라, 사회 여론 시뮬레이션에 적합한 엔티티 유형과 관계 유형을 설계하라.
 
@@ -562,7 +562,7 @@ ontology:
 
 
 simulation_config:
-  # ── 시간 설정 ──
+  # ── Time settings ──
   time_user: |-
     다음 시뮬레이션 요구사항에 기반하여, 시간 시뮬레이션 구성을 생성하라.
 
@@ -611,7 +611,7 @@ simulation_config:
 
   time_system: "너는 소셜미디어 시뮬레이션 전문가다. 순수 JSON 형식으로 반환하며, 시간 구성은 시뮬레이션 시나리오 속 대상 사용자 집단의 생활 패턴에 부합해야 한다."
 
-  # ── 이벤트 설정 ──
+  # ── Event settings ──
   event_user: |-
     다음 시뮬레이션 요구사항에 기반하여, 이벤트 구성을 생성하라.
 
@@ -646,7 +646,7 @@ simulation_config:
 
   event_system_suffix: "IMPORTANT: The 'poster_type' field value MUST be in English PascalCase exactly matching the available entity types. Only 'content', 'narrative_direction', 'hot_topics' and 'reasoning' fields should use the specified language."
 
-  # ── Agent 활동 설정 ──
+  # ── Agent activity settings ──
   agent_user: |-
     다음 정보에 기반하여, 각 엔티티에 대한 소셜미디어 활동 구성을 생성하라.
 
@@ -690,10 +690,10 @@ simulation_config:
 
 
 oasis_profile:
-  # 사용자 화상 생성 시스템 프롬프트 (뒤에 언어 지시문이 붙는다)
+  # User-profile generation system prompt (the language instruction is appended after this)
   system_base: "너는 소셜미디어 사용자 화상 생성 전문가다. 여론 시뮬레이션을 위한 상세하고 사실적인 페르소나를 생성하며, 이미 존재하는 현실 상황을 최대한 복원한다. 반드시 유효한 JSON 형식을 반환해야 하며, 모든 문자열 값에는 이스케이프되지 않은 줄바꿈 문자가 포함될 수 없다."
 
-  # 개인 실체 인설 프롬프트 (trailing newline 포함)
+  # Individual entity persona prompt (includes trailing newline)
   individual_user: |
     엔티티에 대한 상세한 소셜미디어 사용자 페르소나를 생성하되, 이미 존재하는 현실 상황을 최대한 복원하라.
 
@@ -730,7 +730,7 @@ oasis_profile:
     - 내용은 엔티티 정보와 일관성을 유지해야 한다
     - age 는 유효한 정수여야 하고, gender 는 "male" 또는 "female" 이어야 한다
 
-  # 기관/그룹 실체 인설 프롬프트
+  # Institution/group entity persona prompt
   group_user: |-
     기관/집단 엔티티에 대한 상세한 소셜미디어 계정 설정을 생성하되, 이미 존재하는 현실 상황을 최대한 복원하라.
 
@@ -769,7 +769,7 @@ oasis_profile:
 
 
 zep_tools:
-  # ── 문제 분해 ──
+  # ── Question decomposition ──
   decompose_system: |-
     너는 전문 문제 분석 전문가다. 너의 임무는 복잡한 문제를 시뮬레이션 세계에서 독립적으로 관찰할 수 있는 여러 하위 문제로 분해하는 것이다.
 
@@ -790,7 +790,7 @@ zep_tools:
 
     하위 문제 목록을 JSON 형식으로 반환하라.
 
-  # ── 인터뷰 Agent 선택 ──
+  # ── Interview Agent selection ──
   select_agents_system: |-
     너는 전문 인터뷰 기획 전문가다. 너의 임무는 인터뷰 요구사항에 따라, 시뮬레이션 Agent 목록에서 인터뷰에 가장 적합한 대상을 선택하는 것이다.
 
@@ -818,7 +818,7 @@ zep_tools:
 
     인터뷰에 가장 적합한 Agent를 최대 {max_agents}개 선택하고, 선택 이유를 설명하라.
 
-  # ── 인터뷰 질문 생성 ──
+  # ── Interview question generation ──
   questions_system: |-
     너는 전문 기자/인터뷰어다. 인터뷰 요구사항에 따라, 3-5개의 심층 인터뷰 질문을 생성하라.
 
@@ -841,7 +841,7 @@ zep_tools:
 
     3-5개의 인터뷰 질문을 생성하라.
 
-  # ── 인터뷰 요약 ── (system 은 {quote_instruction} placeholder 를 가진다)
+  # ── Interview summary ── (system has a {quote_instruction} placeholder)
   summary_system: |-
     너는 전문 뉴스 편집자다. 여러 인터뷰 대상의 답변에 따라, 인터뷰 요약을 생성하라.
 
@@ -869,8 +869,8 @@ zep_tools:
 
 
 interview:
-  # simulation.py: 단일 행 인터뷰 최적화 prefix
+  # simulation.py: prefix for single-row interview optimization
   optimize_prefix: "너의 페르소나, 모든 과거 기억과 행동을 결합하여, 어떤 도구도 호출하지 말고 텍스트로 직접 나에게 답하라: "
 
-  # zep_tools.py: 배치 인터뷰 Agent 응답 형식 제약 prefix (trailing \n\n 포함)
+  # zep_tools.py: prefix constraining the reply format for batch Agent interviews (includes trailing \n\n)
   batch_reply_prefix: "너는 지금 인터뷰를 받고 있다. 너의 페르소나, 모든 과거 기억과 행동을 결합하여, 다음 질문에 순수 텍스트로 직접 답하라.\n답변 요구사항:\n1. 자연어로 직접 답하고, 어떤 도구도 호출하지 마라\n2. JSON 형식이나 도구 호출 형식을 반환하지 마라\n3. Markdown 제목(예: #, ##, ###)을 사용하지 마라\n4. 질문 번호순으로 하나씩 답하고, 각 답변은 「질문X:」 로 시작하라(X는 질문 번호)\n5. 각 질문의 답변 사이는 빈 줄로 구분하라\n6. 답변은 실질적 내용이 있어야 하며, 각 질문마다 최소 2-3문장으로 답하라\n\n"

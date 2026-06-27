@@ -1,62 +1,62 @@
 """
-OASIS 双平台并行模拟预设脚本
-同时运行Twitter和Reddit模拟，读取相同的配置文件
+    OASIS dual-platform parallel simulation preset script
+    Running Twitter and Reddit simulations simultaneously, reading the same configuration files
 
-功能特性:
-- 双平台（Twitter + Reddit）并行模拟
-- 完成模拟后不立即关闭环境，进入等待命令模式
-- 支持通过IPC接收Interview命令
-- 支持单个Agent采访和批量采访
-- 支持远程关闭环境命令
+    Features:
+    - Dual platform (Twitter + Reddit) parallel simulation
+    - Do not close the environment immediately after completing the simulation and enter the waiting command mode
+    - Support receiving Interview commands via IPC
+    -Supports single Agent interviews and batch interviews
+    -Support remote shutdown environment command
 
-使用方式:
-    python run_parallel_simulation.py --config simulation_config.json
-    python run_parallel_simulation.py --config simulation_config.json --no-wait  # 完成后立即关闭
-    python run_parallel_simulation.py --config simulation_config.json --twitter-only
-    python run_parallel_simulation.py --config simulation_config.json --reddit-only
+    How to use:
+        python run_parallel_simulation.py --config simulation_config.json
+        python run_parallel_simulation.py --config simulation_config.json --no-wait #Close immediately after completion
+        python run_parallel_simulation.py --config simulation_config.json --twitter-only
+        python run_parallel_simulation.py --config simulation_config.json --reddit-only
 
-日志结构:
-    sim_xxx/
-    ├── twitter/
-    │   └── actions.jsonl    # Twitter 平台动作日志
-    ├── reddit/
-    │   └── actions.jsonl    # Reddit 平台动作日志
-    ├── simulation.log       # 主模拟进程日志
-    └── run_state.json       # 运行状态（API 查询用）
+    Log structure:
+        sim_xxx/
+        ├── twitter/
+        │ └── actions.jsonl # Twitter platform action log
+        ├── reddit/
+        │ └── actions.jsonl # Reddit platform action log
+        ├── simulation.log # Main simulation process log
+        └── run_state.json # Running status (for API query)
 """
 
 # ============================================================
-# 解决 Windows 编码问题：在所有 import 之前设置 UTF-8 编码
-# 这是为了修复 OASIS 第三方库读取文件时未指定编码的问题
+# Fix Windows encoding issues: set UTF-8 encoding before all imports
+# This is to fix the problem that the encoding is not specified when the OASIS third-party library reads files
 # ============================================================
 import sys
 import os
 
 if sys.platform == 'win32':
-    # 设置 Python 默认 I/O 编码为 UTF-8
-    # 这会影响所有未指定编码的 open() 调用
+    # Set Python's default I/O encoding to UTF-8
+    # This affects all open() calls that do not specify an encoding
     os.environ.setdefault('PYTHONUTF8', '1')
     os.environ.setdefault('PYTHONIOENCODING', 'utf-8')
     
-    # 重新配置标准输出流为 UTF-8（解决控制台中文乱码）
+    # Reconfigure the standard output stream to UTF-8 (solve Chinese garbled characters in the console)
     if hasattr(sys.stdout, 'reconfigure'):
         sys.stdout.reconfigure(encoding='utf-8', errors='replace')
     if hasattr(sys.stderr, 'reconfigure'):
         sys.stderr.reconfigure(encoding='utf-8', errors='replace')
     
-    # 强制设置默认编码（影响 open() 函数的默认编码）
-    # 注意：这需要在 Python 启动时就设置，运行时设置可能不生效
-    # 所以我们还需要 monkey-patch 内置的 open 函数
+    # Force a default encoding (affects the default encoding of the open() function)
+    # Note: This needs to be set when Python starts, and the runtime setting may not take effect.
+    # So we also need monkey-patch’s built-in open function
     import builtins
     _original_open = builtins.open
     
     def _utf8_open(file, mode='r', buffering=-1, encoding=None, errors=None, 
                    newline=None, closefd=True, opener=None):
         """
-        包装 open() 函数，对于文本模式默认使用 UTF-8 编码
-        这可以修复第三方库（如 OASIS）读取文件时未指定编码的问题
+            Wrap the open() function, using UTF-8 encoding by default for text mode
+                    This fixes an issue where third-party libraries (such as OASIS) read files without specifying the encoding
         """
-        # 只对文本模式（非二进制）且未指定编码的情况设置默认编码
+        # Sets the default encoding only for text mode (non-binary) and no encoding is specified
         if encoding is None and 'b' not in mode:
             encoding = 'utf-8'
         return _original_open(file, mode, buffering, encoding, errors, 
@@ -77,26 +77,26 @@ from datetime import datetime
 from typing import Dict, Any, List, Optional, Tuple
 
 
-# 全局变量：用于信号处理
+# Global variables: used for signal processing
 _shutdown_event = None
 _cleanup_done = False
 
-# 添加 backend 目录到路径
-# 脚本固定位于 backend/scripts/ 目录
+# Add backend directory to path
+# The script is located in the backend/scripts/ directory
 _scripts_dir = os.path.dirname(os.path.abspath(__file__))
 _backend_dir = os.path.abspath(os.path.join(_scripts_dir, '..'))
 _project_root = os.path.abspath(os.path.join(_backend_dir, '..'))
 sys.path.insert(0, _scripts_dir)
 sys.path.insert(0, _backend_dir)
 
-# 加载项目根目录的 .env 文件（包含 LLM_API_KEY 等配置）
+# Load the .env file in the project root directory (including configurations such as LLM_API_KEY)
 from dotenv import load_dotenv
 _env_file = os.path.join(_project_root, '.env')
 if os.path.exists(_env_file):
     load_dotenv(_env_file)
     print(f"Loaded environment config: {_env_file}")
 else:
-    # 尝试加载 backend/.env
+    # Try loading backend/.env
     _backend_env = os.path.join(_backend_dir, '.env')
     if os.path.exists(_backend_env):
         load_dotenv(_backend_env)
@@ -104,25 +104,25 @@ else:
 
 
 class MaxTokensWarningFilter(logging.Filter):
-    """过滤掉 camel-ai 关于 max_tokens 的警告（我们故意不设置 max_tokens，让模型自行决定）"""
+    """Filter out camel-ai warnings about max_tokens (we intentionally don't set max_tokens to let the model decide for itself)"""
     
     def filter(self, record):
-        # 过滤掉包含 max_tokens 警告的日志
+        # Filter out logs containing max_tokens warnings
         if "max_tokens" in record.getMessage() and "Invalid or missing" in record.getMessage():
             return False
         return True
 
 
-# 在模块加载时立即添加过滤器，确保在 camel 代码执行前生效
+# Add the filter immediately when the module is loaded to ensure it takes effect before the camel code is executed
 logging.getLogger().addFilter(MaxTokensWarningFilter())
 
 
 def disable_oasis_logging():
     """
-    禁用 OASIS 库的详细日志输出
-    OASIS 的日志太冗余（记录每个 agent 的观察和动作），我们使用自己的 action_logger
+        Disable verbose logging output for the OASIS library
+            OASIS's logs are too redundant (recording the observations and actions of each agent), so we use our own action_logger
     """
-    # 禁用 OASIS 的所有日志器
+    # Disable all loggers for OASIS
     oasis_loggers = [
         "social.agent",
         "social.twitter", 
@@ -133,22 +133,22 @@ def disable_oasis_logging():
     
     for logger_name in oasis_loggers:
         logger = logging.getLogger(logger_name)
-        logger.setLevel(logging.CRITICAL)  # 只记录严重错误
+        logger.setLevel(logging.CRITICAL)  # Only log serious errors
         logger.handlers.clear()
         logger.propagate = False
 
 
 def init_logging_for_simulation(simulation_dir: str):
     """
-    初始化模拟的日志配置
-    
-    Args:
-        simulation_dir: 模拟目录路径
+        Initialize simulated log configuration
+
+            Args:
+                simulation_dir: simulation directory path
     """
-    # 禁用 OASIS 的详细日志
+    # Disable OASIS verbose logging
     disable_oasis_logging()
     
-    # 清理旧的 log 目录（如果存在）
+    # Clean the old log directory (if it exists)
     old_log_dir = os.path.join(simulation_dir, "log")
     if os.path.exists(old_log_dir):
         import shutil
@@ -174,7 +174,7 @@ except ImportError as e:
     sys.exit(1)
 
 
-# Twitter可用动作（不包含INTERVIEW，INTERVIEW只能通过ManualAction手动触发）
+# Actions available on Twitter (excluding INTERVIEW, INTERVIEW can only be triggered manually through ManualAction)
 TWITTER_ACTIONS = [
     ActionType.CREATE_POST,
     ActionType.LIKE_POST,
@@ -184,7 +184,7 @@ TWITTER_ACTIONS = [
     ActionType.QUOTE_POST,
 ]
 
-# Reddit可用动作（不包含INTERVIEW，INTERVIEW只能通过ManualAction手动触发）
+# Actions available on Reddit (excluding INTERVIEW, INTERVIEW can only be triggered manually through ManualAction)
 REDDIT_ACTIONS = [
     ActionType.LIKE_POST,
     ActionType.DISLIKE_POST,
@@ -202,13 +202,13 @@ REDDIT_ACTIONS = [
 ]
 
 
-# IPC相关常量
+# IPC related constants
 IPC_COMMANDS_DIR = "ipc_commands"
 IPC_RESPONSES_DIR = "ipc_responses"
 ENV_STATUS_FILE = "env_status.json"
 
 class CommandType:
-    """命令类型常量"""
+    """Command type constant"""
     INTERVIEW = "interview"
     BATCH_INTERVIEW = "batch_interview"
     CLOSE_ENV = "close_env"
@@ -216,9 +216,9 @@ class CommandType:
 
 class ParallelIPCHandler:
     """
-    双平台IPC命令处理器
-    
-    管理两个平台的环境，处理Interview命令
+        Dual platform IPC command processor
+
+            Manage the environment of both platforms and process Interview commands
     """
     
     def __init__(
@@ -239,12 +239,12 @@ class ParallelIPCHandler:
         self.responses_dir = os.path.join(simulation_dir, IPC_RESPONSES_DIR)
         self.status_file = os.path.join(simulation_dir, ENV_STATUS_FILE)
         
-        # 确保目录存在
+        # Make sure the directory exists
         os.makedirs(self.commands_dir, exist_ok=True)
         os.makedirs(self.responses_dir, exist_ok=True)
     
     def update_status(self, status: str):
-        """更新环境状态"""
+        """Update environment status"""
         with open(self.status_file, 'w', encoding='utf-8') as f:
             json.dump({
                 "status": status,
@@ -254,11 +254,11 @@ class ParallelIPCHandler:
             }, f, ensure_ascii=False, indent=2)
     
     def poll_command(self) -> Optional[Dict[str, Any]]:
-        """轮询获取待处理命令"""
+        """Polling for pending commands"""
         if not os.path.exists(self.commands_dir):
             return None
         
-        # 获取命令文件（按时间排序）
+        # Get command files (sorted by time)
         command_files = []
         for filename in os.listdir(self.commands_dir):
             if filename.endswith('.json'):
@@ -277,7 +277,7 @@ class ParallelIPCHandler:
         return None
     
     def send_response(self, command_id: str, status: str, result: Dict = None, error: str = None):
-        """发送响应"""
+        """Send response"""
         response = {
             "command_id": command_id,
             "status": status,
@@ -290,7 +290,7 @@ class ParallelIPCHandler:
         with open(response_file, 'w', encoding='utf-8') as f:
             json.dump(response, f, ensure_ascii=False, indent=2)
         
-        # 删除命令文件
+        # delete command file
         command_file = os.path.join(self.commands_dir, f"{command_id}.json")
         try:
             os.remove(command_file)
@@ -299,13 +299,13 @@ class ParallelIPCHandler:
     
     def _get_env_and_graph(self, platform: str):
         """
-        获取指定平台的环境和agent_graph
-        
-        Args:
-            platform: 平台名称 ("twitter" 或 "reddit")
-            
-        Returns:
-            (env, agent_graph, platform_name) 或 (None, None, None)
+            Get the environment and agent_graph of the specified platform
+
+                    Args:
+                        platform: platform name ("twitter" or "reddit")
+
+                    Returns:
+                        (env, agent_graph, platform_name) or (None, None, None)
         """
         if platform == "twitter" and self.twitter_env:
             return self.twitter_env, self.twitter_agent_graph, "twitter"
@@ -316,10 +316,10 @@ class ParallelIPCHandler:
     
     async def _interview_single_platform(self, agent_id: int, prompt: str, platform: str) -> Dict[str, Any]:
         """
-        在单个平台上执行Interview
-        
-        Returns:
-            包含结果的字典，或包含error的字典
+            Conduct interviews on a single platform
+
+                    Returns:
+                        a dictionary containing results, or a dictionary containing errors
         """
         env, agent_graph, actual_platform = self._get_env_and_graph(platform)
         
@@ -344,21 +344,21 @@ class ParallelIPCHandler:
     
     async def handle_interview(self, command_id: str, agent_id: int, prompt: str, platform: str = None) -> bool:
         """
-        处理单个Agent采访命令
-        
-        Args:
-            command_id: 命令ID
-            agent_id: Agent ID
-            prompt: 采访问题
-            platform: 指定平台（可选）
-                - "twitter": 只采访Twitter平台
-                - "reddit": 只采访Reddit平台
-                - None/不指定: 同时采访两个平台，返回整合结果
-            
-        Returns:
-            True 表示成功，False 表示失败
+            Handling a single Agent interview command
+
+                    Args:
+                        command_id: command ID
+                        agent_id: Agent ID
+                        prompt: interview questions
+                        platform: Specify platform (optional)
+                            - "twitter": only interview on Twitter platform
+                            - "reddit": Only interview on the Reddit platform
+                            - None/not specified: interview two platforms at the same time and return the integrated results
+
+                    Returns:
+                        True indicates success, False indicates failure
         """
-        # 如果指定了平台，只采访该平台
+        # If a platform is specified, only that platform will be interviewed
         if platform in ("twitter", "reddit"):
             result = await self._interview_single_platform(agent_id, prompt, platform)
             
@@ -371,7 +371,7 @@ class ParallelIPCHandler:
                 print(f"  Interview completed: agent_id={agent_id}, platform={platform}")
                 return True
         
-        # 未指定平台：同时采访两个平台
+        # Unspecified platform: Interview on two platforms simultaneously
         if not self.twitter_env and not self.reddit_env:
             self.send_response(command_id, "failed", error="No available simulation environment")
             return False
@@ -383,7 +383,7 @@ class ParallelIPCHandler:
         }
         success_count = 0
         
-        # 并行采访两个平台
+        # Parallel interviews on two platforms
         tasks = []
         platforms_to_interview = []
         
@@ -395,7 +395,7 @@ class ParallelIPCHandler:
             tasks.append(self._interview_single_platform(agent_id, prompt, "reddit"))
             platforms_to_interview.append("reddit")
         
-        # 并行执行
+        # Parallel execution
         platform_results = await asyncio.gather(*tasks)
         
         for platform_name, platform_result in zip(platforms_to_interview, platform_results):
@@ -415,20 +415,20 @@ class ParallelIPCHandler:
     
     async def handle_batch_interview(self, command_id: str, interviews: List[Dict], platform: str = None) -> bool:
         """
-        处理批量采访命令
-        
-        Args:
-            command_id: 命令ID
-            interviews: [{"agent_id": int, "prompt": str, "platform": str(optional)}, ...]
-            platform: 默认平台（可被每个interview项覆盖）
-                - "twitter": 只采访Twitter平台
-                - "reddit": 只采访Reddit平台
-                - None/不指定: 每个Agent同时采访两个平台
+            Process batch interview commands
+
+                    Args:
+                        command_id: command ID
+                        interviews: [{"agent_id": int, "prompt": str, "platform": str(optional)}, ...]
+                        platform: default platform (can be overridden by each interview item)
+                            - "twitter": only interview on Twitter platform
+                            - "reddit": Only interview on the Reddit platform
+                            - None/not specified: Each Agent interviews two platforms at the same time
         """
-        # 按平台分组
+        # Group by platform
         twitter_interviews = []
         reddit_interviews = []
-        both_platforms_interviews = []  # 需要同时采访两个平台的
+        both_platforms_interviews = []  # Need to interview two platforms at the same time
         
         for interview in interviews:
             item_platform = interview.get("platform", platform)
@@ -437,10 +437,10 @@ class ParallelIPCHandler:
             elif item_platform == "reddit":
                 reddit_interviews.append(interview)
             else:
-                # 未指定平台：两个平台都采访
+                # Unspecified platform: Interviewed on both platforms
                 both_platforms_interviews.append(interview)
         
-        # 把 both_platforms_interviews 拆分到两个平台
+        # Split both_platforms_interviews into two platforms
         if both_platforms_interviews:
             if self.twitter_env:
                 twitter_interviews.extend(both_platforms_interviews)
@@ -449,7 +449,7 @@ class ParallelIPCHandler:
         
         results = {}
         
-        # 处理Twitter平台的采访
+        # Handle interviews on Twitter platform
         if twitter_interviews and self.twitter_env:
             try:
                 twitter_actions = {}
@@ -476,7 +476,7 @@ class ParallelIPCHandler:
             except Exception as e:
                 print(f"  Twitter batch Interview failed: {e}")
         
-        # 处理Reddit平台的采访
+        # Handling interviews on the Reddit platform
         if reddit_interviews and self.reddit_env:
             try:
                 reddit_actions = {}
@@ -515,7 +515,7 @@ class ParallelIPCHandler:
             return False
     
     def _get_interview_result(self, agent_id: int, platform: str) -> Dict[str, Any]:
-        """从数据库获取最新的Interview结果"""
+        """Get the latest Interview results from the database"""
         db_path = os.path.join(self.simulation_dir, f"{platform}_simulation.db")
         
         result = {
@@ -531,7 +531,7 @@ class ParallelIPCHandler:
             conn = sqlite3.connect(db_path)
             cursor = conn.cursor()
             
-            # 查询最新的Interview记录
+            # Query the latest Interview records
             cursor.execute("""
                 SELECT user_id, info, created_at
                 FROM trace
@@ -559,10 +559,10 @@ class ParallelIPCHandler:
     
     async def process_commands(self) -> bool:
         """
-        处理所有待处理命令
-        
-        Returns:
-            True 表示继续运行，False 表示应该退出
+            Process all pending commands
+
+                    Returns:
+                        True means to continue running, False means that you should exit
         """
         command = self.poll_command()
         if not command:
@@ -602,15 +602,15 @@ class ParallelIPCHandler:
 
 
 def load_config(config_path: str) -> Dict[str, Any]:
-    """加载配置文件"""
+    """Load configuration file"""
     with open(config_path, 'r', encoding='utf-8') as f:
         return json.load(f)
 
 
-# 需要过滤掉的非核心动作类型（这些动作对分析价值较低）
+# Non-core action types that need to be filtered out (these actions have lower value for analysis)
 FILTERED_ACTIONS = {'refresh', 'sign_up'}
 
-# 动作类型映射表（数据库中的名称 -> 标准名称）
+# Action type mapping table (name in database -> standard name)
 ACTION_TYPE_MAP = {
     'create_post': 'CREATE_POST',
     'like_post': 'LIKE_POST',
@@ -632,15 +632,15 @@ ACTION_TYPE_MAP = {
 
 def get_agent_names_from_config(config: Dict[str, Any]) -> Dict[int, str]:
     """
-    从 simulation_config 中获取 agent_id -> entity_name 的映射
-    
-    这样可以在 actions.jsonl 中显示真实的实体名称，而不是 "Agent_0" 这样的代号
-    
-    Args:
-        config: simulation_config.json 的内容
-        
-    Returns:
-        agent_id -> entity_name 的映射字典
+        Get the mapping of agent_id -> entity_name from simulation_config
+
+            This will show the real entity name in actions.jsonl instead of a codename like "Agent_0"
+
+            Args:
+                config: content of simulation_config.json
+
+            Returns:
+                agent_id -> entity_name mapping dictionary
     """
     agent_names = {}
     agent_configs = config.get("agent_configs", [])
@@ -660,17 +660,17 @@ def fetch_new_actions_from_db(
     agent_names: Dict[int, str]
 ) -> Tuple[List[Dict[str, Any]], int]:
     """
-    从数据库中获取新的动作记录，并补充完整的上下文信息
-    
-    Args:
-        db_path: 数据库文件路径
-        last_rowid: 上次读取的最大 rowid 值（使用 rowid 而不是 created_at，因为不同平台的 created_at 格式不同）
-        agent_names: agent_id -> agent_name 映射
-        
-    Returns:
-        (actions_list, new_last_rowid)
-        - actions_list: 动作列表，每个元素包含 agent_id, agent_name, action_type, action_args（含上下文信息）
-        - new_last_rowid: 新的最大 rowid 值
+        Get new action records from the database and supplement them with complete contextual information
+
+            Args:
+                db_path: database file path
+                last_rowid: The maximum rowid value last read (use rowid instead of created_at, because the format of created_at is different on different platforms)
+                agent_names: agent_id -> agent_name mapping
+
+            Returns:
+                (actions_list, new_last_rowid)
+                - actions_list: Action list, each element contains agent_id, agent_name, action_type, action_args (including context information)
+                - new_last_rowid: new maximum rowid value
     """
     actions = []
     new_last_rowid = last_rowid
@@ -682,8 +682,8 @@ def fetch_new_actions_from_db(
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
         
-        # 使用 rowid 来追踪已处理的记录（rowid 是 SQLite 的内置自增字段）
-        # 这样可以避免 created_at 格式差异问题（Twitter 用整数，Reddit 用日期时间字符串）
+        # Use rowid to track processed records (rowid is SQLite's built-in auto-increment field)
+        # This avoids created_at format differences (Twitter uses integers, Reddit uses datetime strings)
         cursor.execute("""
             SELECT rowid, user_id, action, info
             FROM trace
@@ -692,20 +692,20 @@ def fetch_new_actions_from_db(
         """, (last_rowid,))
         
         for rowid, user_id, action, info_json in cursor.fetchall():
-            # 更新最大 rowid
+            # update max rowid
             new_last_rowid = rowid
             
-            # 过滤非核心动作
+            # Filter non-core actions
             if action in FILTERED_ACTIONS:
                 continue
             
-            # 解析动作参数
+            # Parse action parameters
             try:
                 action_args = json.loads(info_json) if info_json else {}
             except json.JSONDecodeError:
                 action_args = {}
             
-            # 精简 action_args，只保留关键字段（保留完整内容，不截断）
+            # Streamline action_args and keep only key fields (keep the complete content without truncation)
             simplified_args = {}
             if 'content' in action_args:
                 simplified_args['content'] = action_args['content']
@@ -726,10 +726,10 @@ def fetch_new_actions_from_db(
             if 'dislike_id' in action_args:
                 simplified_args['dislike_id'] = action_args['dislike_id']
             
-            # 转换动作类型名称
+            # Conversion action type name
             action_type = ACTION_TYPE_MAP.get(action, action.upper())
             
-            # 补充上下文信息（帖子内容、用户名等）
+            # Add contextual information (post content, username, etc.)
             _enrich_action_context(cursor, action_type, simplified_args, agent_names)
             
             actions.append({
@@ -753,16 +753,16 @@ def _enrich_action_context(
     agent_names: Dict[int, str]
 ) -> None:
     """
-    为动作补充上下文信息（帖子内容、用户名等）
-    
-    Args:
-        cursor: 数据库游标
-        action_type: 动作类型
-        action_args: 动作参数（会被修改）
-        agent_names: agent_id -> agent_name 映射
+        Supplement actions with contextual information (post content, username, etc.)
+
+            Args:
+                cursor: database cursor
+                action_type: action type
+                action_args: action parameters (will be modified)
+                agent_names: agent_id -> agent_name mapping
     """
     try:
-        # 点赞/踩帖子：补充帖子内容和作者
+        # Like/Dislike the post: Supplement the post content and author
         if action_type in ('LIKE_POST', 'DISLIKE_POST'):
             post_id = action_args.get('post_id')
             if post_id:
@@ -771,11 +771,11 @@ def _enrich_action_context(
                     action_args['post_content'] = post_info.get('content', '')
                     action_args['post_author_name'] = post_info.get('author_name', '')
         
-        # 转发帖子：补充原帖内容和作者
+        # Repost: Supplement the content and author of the original post
         elif action_type == 'REPOST':
             new_post_id = action_args.get('new_post_id')
             if new_post_id:
-                # 转发帖子的 original_post_id 指向原帖
+                # The original_post_id of the forwarded post points to the original post
                 cursor.execute("""
                     SELECT original_post_id FROM post WHERE post_id = ?
                 """, (new_post_id,))
@@ -787,7 +787,7 @@ def _enrich_action_context(
                         action_args['original_content'] = original_info.get('content', '')
                         action_args['original_author_name'] = original_info.get('author_name', '')
         
-        # 引用帖子：补充原帖内容、作者和引用评论
+        # Quote posts: Supplement original post content, author and quoted comments
         elif action_type == 'QUOTE_POST':
             quoted_id = action_args.get('quoted_id')
             new_post_id = action_args.get('new_post_id')
@@ -798,7 +798,7 @@ def _enrich_action_context(
                     action_args['original_content'] = original_info.get('content', '')
                     action_args['original_author_name'] = original_info.get('author_name', '')
             
-            # 获取引用帖子的评论内容（quote_content）
+            # Get the comment content of the quoted post (quote_content)
             if new_post_id:
                 cursor.execute("""
                     SELECT quote_content FROM post WHERE post_id = ?
@@ -807,11 +807,11 @@ def _enrich_action_context(
                 if row and row[0]:
                     action_args['quote_content'] = row[0]
         
-        # 关注用户：补充被关注用户的名称
+        # Follow users: Supplement the name of the followed user
         elif action_type == 'FOLLOW':
             follow_id = action_args.get('follow_id')
             if follow_id:
-                # 从 follow 表获取 followee_id
+                # Get followee_id from follow table
                 cursor.execute("""
                     SELECT followee_id FROM follow WHERE follow_id = ?
                 """, (follow_id,))
@@ -822,16 +822,16 @@ def _enrich_action_context(
                     if target_name:
                         action_args['target_user_name'] = target_name
         
-        # 屏蔽用户：补充被屏蔽用户的名称
+        # Blocked user: Supplement the name of the blocked user
         elif action_type == 'MUTE':
-            # 从 action_args 中获取 user_id 或 target_id
+            # Get user_id or target_id from action_args
             target_id = action_args.get('user_id') or action_args.get('target_id')
             if target_id:
                 target_name = _get_user_name(cursor, target_id, agent_names)
                 if target_name:
                     action_args['target_user_name'] = target_name
         
-        # 点赞/踩评论：补充评论内容和作者
+        # Like/Dislike comments: Supplement the comment content and author
         elif action_type in ('LIKE_COMMENT', 'DISLIKE_COMMENT'):
             comment_id = action_args.get('comment_id')
             if comment_id:
@@ -840,7 +840,7 @@ def _enrich_action_context(
                     action_args['comment_content'] = comment_info.get('content', '')
                     action_args['comment_author_name'] = comment_info.get('author_name', '')
         
-        # 发表评论：补充所评论的帖子信息
+        # Post a comment: Supplement information about the post being commented on
         elif action_type == 'CREATE_COMMENT':
             post_id = action_args.get('post_id')
             if post_id:
@@ -850,7 +850,7 @@ def _enrich_action_context(
                     action_args['post_author_name'] = post_info.get('author_name', '')
     
     except Exception as e:
-        # 补充上下文失败不影响主流程
+        # Failure to supplement the context does not affect the main process
         print(f"Failed to enrich action context: {e}")
 
 
@@ -860,15 +860,15 @@ def _get_post_info(
     agent_names: Dict[int, str]
 ) -> Optional[Dict[str, str]]:
     """
-    获取帖子信息
-    
-    Args:
-        cursor: 数据库游标
-        post_id: 帖子ID
-        agent_names: agent_id -> agent_name 映射
-        
-    Returns:
-        包含 content 和 author_name 的字典，或 None
+        Get post information
+
+            Args:
+                cursor: database cursor
+                post_id: post ID
+                agent_names: agent_id -> agent_name mapping
+
+            Returns:
+                a dictionary containing content and author_name, or None
     """
     try:
         cursor.execute("""
@@ -883,12 +883,12 @@ def _get_post_info(
             user_id = row[1]
             agent_id = row[2]
             
-            # 优先使用 agent_names 中的名称
+            # Prefer names in agent_names
             author_name = ''
             if agent_id is not None and agent_id in agent_names:
                 author_name = agent_names[agent_id]
             elif user_id:
-                # 从 user 表获取名称
+                # Get name from user table
                 cursor.execute("SELECT name, user_name FROM user WHERE user_id = ?", (user_id,))
                 user_row = cursor.fetchone()
                 if user_row:
@@ -906,15 +906,15 @@ def _get_user_name(
     agent_names: Dict[int, str]
 ) -> Optional[str]:
     """
-    获取用户名称
-    
-    Args:
-        cursor: 数据库游标
-        user_id: 用户ID
-        agent_names: agent_id -> agent_name 映射
-        
-    Returns:
-        用户名称，或 None
+        Get user name
+
+            Args:
+                cursor: database cursor
+                user_id: user ID
+                agent_names: agent_id -> agent_name mapping
+
+            Returns:
+                Username, or None
     """
     try:
         cursor.execute("""
@@ -926,7 +926,7 @@ def _get_user_name(
             name = row[1]
             user_name = row[2]
             
-            # 优先使用 agent_names 中的名称
+            # Prefer names in agent_names
             if agent_id is not None and agent_id in agent_names:
                 return agent_names[agent_id]
             return name or user_name or ''
@@ -941,15 +941,15 @@ def _get_comment_info(
     agent_names: Dict[int, str]
 ) -> Optional[Dict[str, str]]:
     """
-    获取评论信息
-    
-    Args:
-        cursor: 数据库游标
-        comment_id: 评论ID
-        agent_names: agent_id -> agent_name 映射
-        
-    Returns:
-        包含 content 和 author_name 的字典，或 None
+        Get comment information
+
+            Args:
+                cursor: database cursor
+                comment_id: comment ID
+                agent_names: agent_id -> agent_name mapping
+
+            Returns:
+                a dictionary containing content and author_name, or None
     """
     try:
         cursor.execute("""
@@ -964,12 +964,12 @@ def _get_comment_info(
             user_id = row[1]
             agent_id = row[2]
             
-            # 优先使用 agent_names 中的名称
+            # Prefer names in agent_names
             author_name = ''
             if agent_id is not None and agent_id in agent_names:
                 author_name = agent_names[agent_id]
             elif user_id:
-                # 从 user 表获取名称
+                # Get name from user table
                 cursor.execute("SELECT name, user_name FROM user WHERE user_id = ?", (user_id,))
                 user_row = cursor.fetchone()
                 if user_row:
@@ -983,43 +983,43 @@ def _get_comment_info(
 
 def create_model(config: Dict[str, Any], use_boost: bool = False):
     """
-    创建LLM模型
-    
-    支持双 LLM 配置，用于并行模拟时提速：
-    - 通用配置：LLM_API_KEY, LLM_BASE_URL, LLM_MODEL_NAME
-    - 加速配置（可选）：LLM_BOOST_API_KEY, LLM_BOOST_BASE_URL, LLM_BOOST_MODEL_NAME
-    
-    如果配置了加速 LLM，并行模拟时可以让不同平台使用不同的 API 服务商，提高并发能力。
-    
-    Args:
-        config: 模拟配置字典
-        use_boost: 是否使用加速 LLM 配置（如果可用）
+        Create LLM model
+
+            Supports dual LLM configuration to speed up parallel simulation:
+            - Common configuration: LLM_API_KEY, LLM_BASE_URL, LLM_MODEL_NAME
+            - Acceleration configuration (optional): LLM_BOOST_API_KEY, LLM_BOOST_BASE_URL, LLM_BOOST_MODEL_NAME
+
+            If accelerated LLM is configured, different platforms can use different API service providers during parallel simulation to improve concurrency.
+
+            Args:
+                config: simulation configuration dictionary
+                use_boost: whether to use accelerated LLM configuration (if available)
     """
-    # 检查是否有加速配置
+    # Check if there is acceleration configuration
     boost_api_key = os.environ.get("LLM_BOOST_API_KEY", "")
     boost_base_url = os.environ.get("LLM_BOOST_BASE_URL", "")
     boost_model = os.environ.get("LLM_BOOST_MODEL_NAME", "")
     has_boost_config = bool(boost_api_key)
     
-    # 根据参数和配置情况选择使用哪个 LLM
+    # Choose which LLM to use based on parameters and configuration
     if use_boost and has_boost_config:
-        # 使用加速配置
+        # Use acceleration configuration
         llm_api_key = boost_api_key
         llm_base_url = boost_base_url
         llm_model = boost_model or os.environ.get("LLM_MODEL_NAME", "")
         config_label = "[Boost LLM]"
     else:
-        # 使用通用配置
+        # Use common configuration
         llm_api_key = os.environ.get("LLM_API_KEY", "")
         llm_base_url = os.environ.get("LLM_BASE_URL", "")
         llm_model = os.environ.get("LLM_MODEL_NAME", "")
         config_label = "[General LLM]"
     
-    # 如果 .env 中没有模型名，则使用 config 作为备用
+    # If there is no model name in .env, use config as a fallback
     if not llm_model:
         llm_model = config.get("llm_model", "gpt-4o-mini")
     
-    # 设置 camel-ai 所需的环境变量
+    # Set the environment variables required by camel-ai
     if llm_api_key:
         os.environ["OPENAI_API_KEY"] = llm_api_key
     
@@ -1043,7 +1043,7 @@ def get_active_agents_for_round(
     current_hour: int,
     round_num: int
 ) -> List:
-    """根据时间和配置决定本轮激活哪些Agent"""
+    """Determine which agents to activate in this round based on time and configuration"""
     time_config = config.get("time_config", {})
     agent_configs = config.get("agent_configs", [])
     
@@ -1091,7 +1091,7 @@ def get_active_agents_for_round(
 
 
 class PlatformSimulation:
-    """平台模拟结果容器"""
+    """Platform simulation result container"""
     def __init__(self):
         self.env = None
         self.agent_graph = None
@@ -1105,17 +1105,18 @@ async def run_twitter_simulation(
     main_logger: Optional[SimulationLogManager] = None,
     max_rounds: Optional[int] = None
 ) -> PlatformSimulation:
-    """运行Twitter模拟
-    
-    Args:
-        config: 模拟配置
-        simulation_dir: 模拟目录
-        action_logger: 动作日志记录器
-        main_logger: 主日志管理器
-        max_rounds: 最大模拟轮数（可选，用于截断过长的模拟）
-        
-    Returns:
-        PlatformSimulation: 包含env和agent_graph的结果对象
+    """
+        Run a Twitter simulation
+
+            Args:
+                config: simulation configuration
+                simulation_dir: simulation directory
+                action_logger: action logger
+                main_logger: main log manager
+                max_rounds: Maximum number of simulation rounds (optional, used to truncate simulations that are too long)
+
+            Returns:
+                PlatformSimulation: result object containing env and agent_graph
     """
     result = PlatformSimulation()
     
@@ -1126,10 +1127,10 @@ async def run_twitter_simulation(
     
     log_info("Initializing...")
     
-    # Twitter 使用通用 LLM 配置
+    # Twitter uses generic LLM configuration
     model = create_model(config, use_boost=False)
     
-    # OASIS Twitter使用CSV格式
+    # OASIS Twitter uses CSV format
     profile_path = os.path.join(simulation_dir, "twitter_profiles.csv")
     if not os.path.exists(profile_path):
         log_info(f"Error: Profile file does not exist: {profile_path}")
@@ -1141,9 +1142,9 @@ async def run_twitter_simulation(
         available_actions=TWITTER_ACTIONS,
     )
     
-    # 从配置文件获取 Agent 真实名称映射（使用 entity_name 而非默认的 Agent_X）
+    # Get Agent real name mapping from configuration file (use entity_name instead of default Agent_X)
     agent_names = get_agent_names_from_config(config)
-    # 如果配置中没有某个 agent，则使用 OASIS 的默认名称
+    # If an agent is not present in the configuration, the default name of OASIS is used
     for agent_id, agent in result.agent_graph.get_agents():
         if agent_id not in agent_names:
             agent_names[agent_id] = getattr(agent, 'name', f'Agent_{agent_id}')
@@ -1156,7 +1157,7 @@ async def run_twitter_simulation(
         agent_graph=result.agent_graph,
         platform=oasis.DefaultPlatformType.TWITTER,
         database_path=db_path,
-        semaphore=30,  # 限制最大并发 LLM 请求数，防止 API 过载
+        semaphore=30,  # Limit the maximum number of concurrent LLM requests to prevent API overload
     )
     
     await result.env.reset()
@@ -1166,13 +1167,13 @@ async def run_twitter_simulation(
         action_logger.log_simulation_start(config)
     
     total_actions = 0
-    last_rowid = 0  # 跟踪数据库中最后处理的行号（使用 rowid 避免 created_at 格式差异）
+    last_rowid = 0  # Keep track of the last processed row number in the database (use rowid to avoid created_at format differences)
     
-    # 执行初始事件
+    # Execute initial event
     event_config = config.get("event_config", {})
     initial_posts = event_config.get("initial_posts", [])
     
-    # 记录 round 0 开始（初始事件阶段）
+    # Record round 0 starts (initial event phase)
     if action_logger:
         action_logger.log_round_start(0, 0)  # round 0, simulated_hour 0
     
@@ -1206,17 +1207,17 @@ async def run_twitter_simulation(
             await result.env.step(initial_actions)
             log_info(f"Published {len(initial_actions)} initial posts")
     
-    # 记录 round 0 结束
+    # Record round 0 end
     if action_logger:
         action_logger.log_round_end(0, initial_action_count)
     
-    # 主模拟循环
+    # main simulation loop
     time_config = config.get("time_config", {})
     total_hours = time_config.get("total_simulation_hours", 72)
     minutes_per_round = time_config.get("minutes_per_round", 30)
     total_rounds = (total_hours * 60) // minutes_per_round
     
-    # 如果指定了最大轮数，则截断
+    # Truncate if maximum number of rounds is specified
     if max_rounds is not None and max_rounds > 0:
         original_rounds = total_rounds
         total_rounds = min(total_rounds, max_rounds)
@@ -1226,7 +1227,7 @@ async def run_twitter_simulation(
     start_time = datetime.now()
     
     for round_num in range(total_rounds):
-        # 检查是否收到退出信号
+        # Check if exit signal received
         if _shutdown_event and _shutdown_event.is_set():
             if main_logger:
                 main_logger.info(f"Received exit signal, stopping simulation at round {round_num + 1}")
@@ -1240,12 +1241,12 @@ async def run_twitter_simulation(
             result.env, config, simulated_hour, round_num
         )
         
-        # 无论是否有活跃agent，都记录round开始
+        # Regardless of whether there is an active agent, the start of the round is recorded.
         if action_logger:
             action_logger.log_round_start(round_num + 1, simulated_hour)
         
         if not active_agents:
-            # 没有活跃agent时也记录round结束（actions_count=0）
+            # The end of the round is also recorded when there is no active agent (actions_count=0)
             if action_logger:
                 action_logger.log_round_end(round_num + 1, 0)
             continue
@@ -1253,7 +1254,7 @@ async def run_twitter_simulation(
         actions = {agent: LLMAction() for _, agent in active_agents}
         await result.env.step(actions)
         
-        # 从数据库获取实际执行的动作并记录
+        # Get the actual executed actions from the database and record them
         actual_actions, last_rowid = fetch_new_actions_from_db(
             db_path, last_rowid, agent_names
         )
@@ -1278,7 +1279,7 @@ async def run_twitter_simulation(
             progress = (round_num + 1) / total_rounds * 100
             log_info(f"Day {simulated_day}, {simulated_hour:02d}:00 - Round {round_num + 1}/{total_rounds} ({progress:.1f}%)")
     
-    # 注意：不关闭环境，保留给Interview使用
+    # Note: Do not close the environment and reserve it for Interview use
     
     if action_logger:
         action_logger.log_simulation_end(total_rounds, total_actions)
@@ -1297,17 +1298,18 @@ async def run_reddit_simulation(
     main_logger: Optional[SimulationLogManager] = None,
     max_rounds: Optional[int] = None
 ) -> PlatformSimulation:
-    """运行Reddit模拟
-    
-    Args:
-        config: 模拟配置
-        simulation_dir: 模拟目录
-        action_logger: 动作日志记录器
-        main_logger: 主日志管理器
-        max_rounds: 最大模拟轮数（可选，用于截断过长的模拟）
-        
-    Returns:
-        PlatformSimulation: 包含env和agent_graph的结果对象
+    """
+        Run Reddit simulation
+
+            Args:
+                config: simulation configuration
+                simulation_dir: simulation directory
+                action_logger: action logger
+                main_logger: main log manager
+                max_rounds: Maximum number of simulation rounds (optional, used to truncate simulations that are too long)
+
+            Returns:
+                PlatformSimulation: result object containing env and agent_graph
     """
     result = PlatformSimulation()
     
@@ -1318,7 +1320,7 @@ async def run_reddit_simulation(
     
     log_info("Initializing...")
     
-    # Reddit 使用加速 LLM 配置（如果有的话，否则回退到通用配置）
+    # Reddit uses an accelerated LLM configuration if available, otherwise falls back to the generic configuration
     model = create_model(config, use_boost=True)
     
     profile_path = os.path.join(simulation_dir, "reddit_profiles.json")
@@ -1332,9 +1334,9 @@ async def run_reddit_simulation(
         available_actions=REDDIT_ACTIONS,
     )
     
-    # 从配置文件获取 Agent 真实名称映射（使用 entity_name 而非默认的 Agent_X）
+    # Get Agent real name mapping from configuration file (use entity_name instead of default Agent_X)
     agent_names = get_agent_names_from_config(config)
-    # 如果配置中没有某个 agent，则使用 OASIS 的默认名称
+    # If an agent is not present in the configuration, the default name of OASIS is used
     for agent_id, agent in result.agent_graph.get_agents():
         if agent_id not in agent_names:
             agent_names[agent_id] = getattr(agent, 'name', f'Agent_{agent_id}')
@@ -1347,7 +1349,7 @@ async def run_reddit_simulation(
         agent_graph=result.agent_graph,
         platform=oasis.DefaultPlatformType.REDDIT,
         database_path=db_path,
-        semaphore=30,  # 限制最大并发 LLM 请求数，防止 API 过载
+        semaphore=30,  # Limit the maximum number of concurrent LLM requests to prevent API overload
     )
     
     await result.env.reset()
@@ -1357,13 +1359,13 @@ async def run_reddit_simulation(
         action_logger.log_simulation_start(config)
     
     total_actions = 0
-    last_rowid = 0  # 跟踪数据库中最后处理的行号（使用 rowid 避免 created_at 格式差异）
+    last_rowid = 0  # Keep track of the last processed row number in the database (use rowid to avoid created_at format differences)
     
-    # 执行初始事件
+    # Execute initial event
     event_config = config.get("event_config", {})
     initial_posts = event_config.get("initial_posts", [])
     
-    # 记录 round 0 开始（初始事件阶段）
+    # Record round 0 starts (initial event phase)
     if action_logger:
         action_logger.log_round_start(0, 0)  # round 0, simulated_hour 0
     
@@ -1405,17 +1407,17 @@ async def run_reddit_simulation(
             await result.env.step(initial_actions)
             log_info(f"Published {len(initial_actions)} initial posts")
     
-    # 记录 round 0 结束
+    # Record round 0 end
     if action_logger:
         action_logger.log_round_end(0, initial_action_count)
     
-    # 主模拟循环
+    # main simulation loop
     time_config = config.get("time_config", {})
     total_hours = time_config.get("total_simulation_hours", 72)
     minutes_per_round = time_config.get("minutes_per_round", 30)
     total_rounds = (total_hours * 60) // minutes_per_round
     
-    # 如果指定了最大轮数，则截断
+    # Truncate if maximum number of rounds is specified
     if max_rounds is not None and max_rounds > 0:
         original_rounds = total_rounds
         total_rounds = min(total_rounds, max_rounds)
@@ -1425,7 +1427,7 @@ async def run_reddit_simulation(
     start_time = datetime.now()
     
     for round_num in range(total_rounds):
-        # 检查是否收到退出信号
+        # Check if exit signal received
         if _shutdown_event and _shutdown_event.is_set():
             if main_logger:
                 main_logger.info(f"Received exit signal, stopping simulation at round {round_num + 1}")
@@ -1439,12 +1441,12 @@ async def run_reddit_simulation(
             result.env, config, simulated_hour, round_num
         )
         
-        # 无论是否有活跃agent，都记录round开始
+        # Regardless of whether there is an active agent, the start of the round is recorded.
         if action_logger:
             action_logger.log_round_start(round_num + 1, simulated_hour)
         
         if not active_agents:
-            # 没有活跃agent时也记录round结束（actions_count=0）
+            # The end of the round is also recorded when there is no active agent (actions_count=0)
             if action_logger:
                 action_logger.log_round_end(round_num + 1, 0)
             continue
@@ -1452,7 +1454,7 @@ async def run_reddit_simulation(
         actions = {agent: LLMAction() for _, agent in active_agents}
         await result.env.step(actions)
         
-        # 从数据库获取实际执行的动作并记录
+        # Get the actual executed actions from the database and record them
         actual_actions, last_rowid = fetch_new_actions_from_db(
             db_path, last_rowid, agent_names
         )
@@ -1477,7 +1479,7 @@ async def run_reddit_simulation(
             progress = (round_num + 1) / total_rounds * 100
             log_info(f"Day {simulated_day}, {simulated_hour:02d}:00 - Round {round_num + 1}/{total_rounds} ({progress:.1f}%)")
     
-    # 注意：不关闭环境，保留给Interview使用
+    # Note: Do not close the environment and reserve it for Interview use
     
     if action_logger:
         action_logger.log_simulation_end(total_rounds, total_actions)
@@ -1522,7 +1524,7 @@ async def main():
     
     args = parser.parse_args()
     
-    # 在 main 函数开始时创建 shutdown 事件，确保整个程序都能响应退出信号
+    # Create a shutdown event at the beginning of the main function to ensure that the entire program can respond to the exit signal
     global _shutdown_event
     _shutdown_event = asyncio.Event()
     
@@ -1534,10 +1536,10 @@ async def main():
     simulation_dir = os.path.dirname(args.config) or "."
     wait_for_commands = not args.no_wait
     
-    # 初始化日志配置（禁用 OASIS 日志，清理旧文件）
+    # Initialize log configuration (disable OASIS logs, clean old files)
     init_logging_for_simulation(simulation_dir)
     
-    # 创建日志管理器
+    # Create a log manager
     log_manager = SimulationLogManager(simulation_dir)
     twitter_logger = log_manager.get_twitter_logger()
     reddit_logger = log_manager.get_reddit_logger()
@@ -1572,7 +1574,7 @@ async def main():
     
     start_time = datetime.now()
     
-    # 存储两个平台的模拟结果
+    # Store simulation results for both platforms
     twitter_result: Optional[PlatformSimulation] = None
     reddit_result: Optional[PlatformSimulation] = None
     
@@ -1581,7 +1583,7 @@ async def main():
     elif args.reddit_only:
         reddit_result = await run_reddit_simulation(config, simulation_dir, reddit_logger, log_manager, args.max_rounds)
     else:
-        # 并行运行（每个平台使用独立的日志记录器）
+        # Run in parallel (use separate logger for each platform)
         results = await asyncio.gather(
             run_twitter_simulation(config, simulation_dir, twitter_logger, log_manager, args.max_rounds),
             run_reddit_simulation(config, simulation_dir, reddit_logger, log_manager, args.max_rounds),
@@ -1592,7 +1594,7 @@ async def main():
     log_manager.info("=" * 60)
     log_manager.info(f"Simulation loop complete! Total time: {total_elapsed:.1f}s")
     
-    # 是否进入等待命令模式
+    # Whether to enter the waiting command mode
     if wait_for_commands:
         log_manager.info("")
         log_manager.info("=" * 60)
@@ -1600,7 +1602,7 @@ async def main():
         log_manager.info("Supported commands: interview, batch_interview, close_env")
         log_manager.info("=" * 60)
         
-        # 创建IPC处理器
+        # Create IPC handler
         ipc_handler = ParallelIPCHandler(
             simulation_dir=simulation_dir,
             twitter_env=twitter_result.env if twitter_result else None,
@@ -1610,18 +1612,18 @@ async def main():
         )
         ipc_handler.update_status("alive")
         
-        # 等待命令循环（使用全局 _shutdown_event）
+        # Wait for command loop (using global _shutdown_event)
         try:
             while not _shutdown_event.is_set():
                 should_continue = await ipc_handler.process_commands()
                 if not should_continue:
                     break
-                # 使用 wait_for 替代 sleep，这样可以响应 shutdown_event
+                # Use wait_for instead of sleep, which can respond to shutdown_event
                 try:
                     await asyncio.wait_for(_shutdown_event.wait(), timeout=0.5)
-                    break  # 收到退出信号
+                    break  # Exit signal received
                 except asyncio.TimeoutError:
-                    pass  # 超时继续循环
+                    pass  # Continue looping after timeout
         except KeyboardInterrupt:
             print("\nReceived interrupt signal")
         except asyncio.CancelledError:
@@ -1632,7 +1634,7 @@ async def main():
         log_manager.info("\nClosing environment...")
         ipc_handler.update_status("stopped")
     
-    # 关闭环境
+    # Close environment
     if twitter_result and twitter_result.env:
         await twitter_result.env.close()
         log_manager.info("[Twitter] Environment closed")
@@ -1652,13 +1654,13 @@ async def main():
 
 def setup_signal_handlers(loop=None):
     """
-    设置信号处理器，确保收到 SIGTERM/SIGINT 时能够正确退出
-    
-    持久化模拟场景：模拟完成后不退出，等待 interview 命令
-    当收到终止信号时，需要：
-    1. 通知 asyncio 循环退出等待
-    2. 让程序有机会正常清理资源（关闭数据库、环境等）
-    3. 然后才退出
+        Set up the signal handler to ensure correct exit when receiving SIGTERM/SIGINT
+
+            Persistent simulation scenario: do not exit after the simulation is completed, wait for the interview command
+            When a termination signal is received, you need to:
+            1. Notify asyncio to exit the waiting loop
+            2. Give the program a chance to clean up resources normally (close the database, environment, etc.)
+            3. Then exit
     """
     def signal_handler(signum, frame):
         global _cleanup_done
@@ -1667,12 +1669,12 @@ def setup_signal_handlers(loop=None):
         
         if not _cleanup_done:
             _cleanup_done = True
-            # 设置事件通知 asyncio 循环退出（让循环有机会清理资源）
+            # Set an event to notify the asyncio loop to exit (giving the loop a chance to clean up resources)
             if _shutdown_event:
                 _shutdown_event.set()
         
-        # 不要直接 sys.exit()，让 asyncio 循环正常退出并清理资源
-        # 如果是重复收到信号，才强制退出
+        # Don't call sys.exit() directly, let the asyncio loop exit normally and clean up resources
+        # If you receive repeated signals, you will be forced to exit.
         else:
             print("Force exit...")
             sys.exit(1)
@@ -1690,7 +1692,7 @@ if __name__ == "__main__":
     except SystemExit:
         pass
     finally:
-        # 清理 multiprocessing 资源跟踪器（防止退出时的警告）
+        # Clean up multiprocessing resource tracker (prevent warnings on exit)
         try:
             from multiprocessing import resource_tracker
             resource_tracker._resource_tracker._stop()

@@ -50,7 +50,7 @@
 
       <!-- Right Panel: Step Components -->
       <div class="panel-wrapper right" :style="rightPanelStyle">
-        <!-- Step 1: 图谱构建 -->
+        <!-- Step 1: graph build -->
         <Step1GraphBuild 
           v-if="currentStep === 1"
           :currentPhase="currentPhase"
@@ -64,7 +64,7 @@
           @next-step="handleNextStep"
           @retry-build="retryBuildGraph"
         />
-        <!-- Step 2: 环境搭建 -->
+        <!-- Step 2: environment setup -->
         <Step2EnvSetup
           v-else-if="currentStep === 2"
           :projectData="projectData"
@@ -98,7 +98,7 @@ const { t, tm } = useI18n()
 const viewMode = ref('split') // graph | split | workbench
 
 // Step State
-const currentStep = ref(1) // 1: 图谱构建, 2: 环境搭建, 3: 开始模拟, 4: 报告生成, 5: 深度互动
+const currentStep = ref(1) // 1: graph build, 2: env setup, 3: start simulation, 4: report generation, 5: deep interaction
 const stepNames = computed(() => tm('main.stepNames'))
 
 // Data State
@@ -195,7 +195,7 @@ const handleNextStep = (params = {}) => {
     currentStep.value++
     addLog(t('log.enterStep', { step: currentStep.value, name: stepNames.value[currentStep.value - 1] }))
     
-    // 如果是从 Step 2 进入 Step 3，记录模拟轮数配置
+    // When entering Step 3 from Step 2, log simulation rounds config
     if (currentStep.value === 3 && params.maxRounds) {
       addLog(t('log.customSimRounds', { rounds: params.maxRounds }))
     }
@@ -389,14 +389,14 @@ const fetchGraphData = async () => {
 
   isGraphDataRequestInFlight = true
   try {
-    // 구축 중에는 캐시를 우회해 FalkorDB 최신 노드/엣지를 반영
+    // During build, bypass cache to reflect latest FalkorDB nodes/edges
     const gRes = await getGraphData(graphId, { refresh: currentPhase.value === 1 })
     if (gRes.success) {
       const nodeCount = gRes.data.node_count || gRes.data.nodes?.length || 0
       const edgeCount = gRes.data.edge_count || gRes.data.edges?.length || 0
       const prevNodeCount = graphData.value?.node_count || graphData.value?.nodes?.length || 0
 
-      // 구축 중 일시적 빈 응답은 UI를 지우지 않음 (FalkorDB/Graphiti 쓰기 경합)
+      // During build, skip transient empty responses to avoid clearing UI (FalkorDB/Graphiti write contention)
       if (currentPhase.value === 1 && prevNodeCount > 0 && nodeCount === 0) {
         addLog(`Graph refresh skipped (transient empty response while building)`)
         return

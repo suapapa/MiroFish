@@ -1,8 +1,8 @@
 """
-온톨로지 정규화 및 검증.
+Ontology normalization and validation.
 
-LLM이 json_object 모드에서 스키마를 어기거나 entity/edge를 중첩해 반환할 때
-그래프 구축 전에 구조를 복구·검증한다.
+When the LLM returns malformed structure in json_object mode (nested entity/edge,
+schema violations), recover and validate structure before graph build.
 """
 
 from __future__ import annotations
@@ -223,7 +223,7 @@ def _looks_well_formed(ontology: Dict[str, Any]) -> bool:
 
 
 def normalize_ontology(ontology: Any) -> Dict[str, Any]:
-    """LLM이 반환한 온톨로지를 표준 구조로 정규화한다."""
+    """Normalize LLM-returned ontology into standard structure."""
     if not isinstance(ontology, dict):
         return {"entity_types": [], "edge_types": [], "analysis_summary": ""}
 
@@ -278,7 +278,7 @@ def normalize_ontology(ontology: Any) -> Dict[str, Any]:
 
 
 def validate_ontology(ontology: Dict[str, Any]) -> Optional[str]:
-    """유효하지 않으면 오류 코드 문자열을 반환한다."""
+    """Return an error code string if invalid."""
     entities = ontology.get("entity_types") or []
     edges = ontology.get("edge_types") or []
 

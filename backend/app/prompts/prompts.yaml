@@ -1,17 +1,17 @@
 # ============================================================
-# MiroFish 백엔드 LLM 프롬프트 정의
+# MiroFish Backend LLM Prompt Definitions (Chinese default)
 # ============================================================
-# 코드에서는 app/utils/prompts.py 의 get_prompt("namespace.key") 로 로드한다.
+# Loaded in code via app/utils/prompts.py get_prompt("namespace.key").
 #
-# 주의사항:
-#  - {var} 형태는 코드에서 str.format() 으로 치환되는 placeholder 다.
-#  - {{ 와 }} 는 .format() 이후 리터럴 중괄호 { } 로 남는다 (JSON 예시 등). 수정 금지.
-#  - system prompt 중 일부는 .format() 을 거치지 않으므로 단일 중괄호 { } 가 그대로 사용된다.
-#  - 언어 지시문(get_language_instruction) 등 런타임 결합은 코드에 남아 있다.
+# Notes:
+#  - {var} placeholders are substituted in code with str.format().
+#  - {{ and }} become literal braces { } after .format() (e.g. JSON examples). Do not change.
+#  - Some system prompts are NOT passed through .format(), so single braces { } are used literally there.
+#  - Runtime combinations such as the language instruction (get_language_instruction) remain in code.
 # ============================================================
 
 report_agent:
-  # ── 도구 설명 ──
+  # ── Tool descriptions ──
   tool_desc_insight_forge: |-
     【深度洞察检索 - 强大的检索工具】
     这是我们强大的检索函数，专为深度分析设计。它会：
@@ -86,7 +86,7 @@ report_agent:
 
     【重要】需要OASIS模拟环境正在运行才能使用此功能！
 
-  # ── 大纲规划 prompt ──
+  # ── Outline planning prompt ──
   plan_system: |-
     你是一个「未来预测报告」的撰写专家，拥有对模拟世界的「上帝视角」——你可以洞察模拟中每一位Agent的行为、言论和互动。
 
@@ -148,7 +148,7 @@ report_agent:
 
     【再次提醒】报告章节数量：最少2个，最多5个，内容要精炼聚焦于核心预测发现。
 
-  # ── 章节生成 prompt ──
+  # ── Section generation prompt ──
   section_system: |-
     你是一个「未来预测报告」的撰写专家，正在撰写报告的一个章节。
 
@@ -328,7 +328,7 @@ report_agent:
     2. 然后调用工具（Action）获取模拟数据
     3. 收集足够信息后输出 Final Answer（纯正文，无任何标题）
 
-  # ── ReACT 循环内消息模板 ──
+  # ── Message templates inside the ReACT loop ──
   react_observation: |-
     Observation（检索结果）:
 
@@ -384,7 +384,7 @@ report_agent:
 
 
 ontology:
-  # 본체 생성 시스템 프롬프트
+  # Ontology generation system prompt
   system: |
     你是一个专业的知识图谱本体设计专家。你的任务是分析给定的文本内容和模拟需求，设计适合**社交媒体舆论模拟**的实体类型和关系类型。
 
@@ -530,10 +530,10 @@ ontology:
     - COLLABORATES_WITH: 合作
     - COMPETES_WITH: 竞争
 
-  # system 프롬프트 뒤에 언어 지시문과 함께 덧붙는 영어 강제 지시문
+  # English enforcement instruction appended after the system prompt along with the language instruction
   system_suffix: "IMPORTANT: Entity type names MUST be in English PascalCase (e.g., 'PersonEntity', 'MediaOrganization'). Relationship type names MUST be in English UPPER_SNAKE_CASE (e.g., 'WORKS_FOR'). Attribute names MUST be in English snake_case. Only description fields and analysis_summary should use the specified language above."
 
-  # 사용자 메시지 본문 (trailing newline 포함)
+  # User message body (includes trailing newline)
   user_main: |
     ## 模拟需求
 
@@ -543,13 +543,13 @@ ontology:
 
     {combined_text}
 
-  # 추가 컨텍스트 블록 (코드에서 앞에 \n 을 붙여 사용)
+  # Additional context block (prefixed with \n in code)
   user_additional: |
     ## 额外说明
 
     {additional_context}
 
-  # 마무리 규칙 블록 (코드에서 앞에 \n 을 붙여 사용)
+  # Closing rules block (prefixed with \n in code)
   user_footer: |
     请根据以上内容，设计适合社会舆论模拟的实体类型和关系类型。
 
@@ -562,7 +562,7 @@ ontology:
 
 
 simulation_config:
-  # ── 시간 설정 ──
+  # ── Time settings ──
   time_user: |-
     基于以下模拟需求，生成时间模拟配置。
 
@@ -611,7 +611,7 @@ simulation_config:
 
   time_system: "你是社交媒体模拟专家。返回纯JSON格式，时间配置需符合模拟场景中目标用户群体的作息习惯。"
 
-  # ── 이벤트 설정 ──
+  # ── Event settings ──
   event_user: |-
     基于以下模拟需求，生成事件配置。
 
@@ -646,7 +646,7 @@ simulation_config:
 
   event_system_suffix: "IMPORTANT: The 'poster_type' field value MUST be in English PascalCase exactly matching the available entity types. Only 'content', 'narrative_direction', 'hot_topics' and 'reasoning' fields should use the specified language."
 
-  # ── Agent 활동 설정 ──
+  # ── Agent activity settings ──
   agent_user: |-
     基于以下信息，为每个实体生成社交媒体活动配置。
 
@@ -690,10 +690,10 @@ simulation_config:
 
 
 oasis_profile:
-  # 사용자 화상 생성 시스템 프롬프트 (뒤에 언어 지시문이 붙는다)
+  # User-profile generation system prompt (the language instruction is appended after this)
   system_base: "你是社交媒体用户画像生成专家。生成详细、真实的人设用于舆论模拟,最大程度还原已有现实情况。必须返回有效的JSON格式，所有字符串值不能包含未转义的换行符。"
 
-  # 개인 실체 인설 프롬프트 (trailing newline 포함)
+  # Individual entity persona prompt (includes trailing newline)
   individual_user: |
     为实体生成详细的社交媒体用户人设,最大程度还原已有现实情况。
 
@@ -730,7 +730,7 @@ oasis_profile:
     - 内容要与实体信息保持一致
     - age必须是有效的整数，gender必须是"male"或"female"
 
-  # 기관/그룹 실체 인설 프롬프트
+  # Institution/group entity persona prompt
   group_user: |-
     为机构/群体实体生成详细的社交媒体账号设定,最大程度还原已有现实情况。
 
@@ -769,7 +769,7 @@ oasis_profile:
 
 
 zep_tools:
-  # ── 문제 분해 ──
+  # ── Question decomposition ──
   decompose_system: |-
     你是一个专业的问题分析专家。你的任务是将一个复杂问题分解为多个可以在模拟世界中独立观察的子问题。
 
@@ -790,7 +790,7 @@ zep_tools:
 
     返回JSON格式的子问题列表。
 
-  # ── 採访 Agent 선택 ──
+  # ── Interview Agent selection ──
   select_agents_system: |-
     你是一个专业的采访策划专家。你的任务是根据采访需求，从模拟Agent列表中选择最适合采访的对象。
 
@@ -818,7 +818,7 @@ zep_tools:
 
     请选择最多{max_agents}个最适合采访的Agent，并说明选择理由。
 
-  # ── 採访 질문 생성 ──
+  # ── Interview question generation ──
   questions_system: |-
     你是一个专业的记者/采访者。根据采访需求，生成3-5个深度采访问题。
 
@@ -841,7 +841,7 @@ zep_tools:
 
     请生成3-5个采访问题。
 
-  # ── 採访 요약 ── (system 은 {quote_instruction} placeholder 를 가진다)
+  # ── Interview summary ── (system has a {quote_instruction} placeholder)
   summary_system: |-
     你是一个专业的新闻编辑。请根据多位受访者的回答，生成一份采访摘要。
 
@@ -869,8 +869,8 @@ zep_tools:
 
 
 interview:
-  # simulation.py: 단일 행 인터뷰 최적화 prefix
+  # simulation.py: prefix for single-row interview optimization
   optimize_prefix: "结合你的人设、所有的过往记忆与行动，不调用任何工具直接用文本回复我："
 
-  # zep_tools.py: 배치 採访 Agent 응답 형식 제약 prefix (trailing \n\n 포함)
+  # zep_tools.py: prefix constraining the reply format for batch Agent interviews (includes trailing \n\n)
   batch_reply_prefix: "你正在接受一次采访。请结合你的人设、所有的过往记忆与行动，以纯文本方式直接回答以下问题。\n回复要求：\n1. 直接用自然语言回答，不要调用任何工具\n2. 不要返回JSON格式或工具调用格式\n3. 不要使用Markdown标题（如#、##、###）\n4. 按问题编号逐一回答，每个回答以「问题X：」开头（X为问题编号）\n5. 每个问题的回答之间用空行分隔\n6. 回答要有实质内容，每个问题至少回答2-3句话\n\n"

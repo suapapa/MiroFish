@@ -1,9 +1,9 @@
 """
-任务状态管理
-用于跟踪长时间运行的任务（如图谱构建）
+Task state management
+Track long-running tasks (e.g. graph build)
 
-任务状态持久化到磁盘（uploads/tasks/），以便在 gunicorn 多 worker 之间共享，
-并在后端重启后仍可查询进行中的任务。
+Task state is persisted to disk (uploads/tasks/) for sharing across gunicorn workers
+and for querying in-progress tasks after backend restart.
 """
 
 import fcntl
@@ -21,30 +21,30 @@ from ..utils.locale import t
 
 
 class TaskStatus(str, Enum):
-    """任务状态枚举"""
-    PENDING = "pending"          # 等待中
-    PROCESSING = "processing"    # 处理中
-    COMPLETED = "completed"      # 已完成
-    FAILED = "failed"            # 失败
+    """Task status enum"""
+    PENDING = "pending"          # Waiting
+    PROCESSING = "processing"    # In progress
+    COMPLETED = "completed"      # Done
+    FAILED = "failed"            # Failed
 
 
 @dataclass
 class Task:
-    """任务数据类"""
+    """Task record"""
     task_id: str
     task_type: str
     status: TaskStatus
     created_at: datetime
     updated_at: datetime
-    progress: int = 0              # 总进度百分比 0-100
-    message: str = ""              # 状态消息
-    result: Optional[Dict] = None  # 任务结果
-    error: Optional[str] = None    # 错误信息
-    metadata: Dict = field(default_factory=dict)  # 额外元数据
-    progress_detail: Dict = field(default_factory=dict)  # 详细进度信息
+    progress: int = 0              # Overall progress 0-100
+    message: str = ""              # Status message
+    result: Optional[Dict] = None  # Task result
+    error: Optional[str] = None    # Error details
+    metadata: Dict = field(default_factory=dict)  # Extra metadata
+    progress_detail: Dict = field(default_factory=dict)  # Detailed progress
 
     def to_dict(self) -> Dict[str, Any]:
-        """转换为字典"""
+        """Convert to dictionary"""
         return {
             "task_id": self.task_id,
             "task_type": self.task_type,
@@ -61,7 +61,7 @@ class Task:
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "Task":
-        """从字典恢复任务"""
+        """Restore from dictionary"""
         return cls(
             task_id=data["task_id"],
             task_type=data["task_type"],
@@ -79,8 +79,8 @@ class Task:
 
 class TaskManager:
     """
-    任务管理器
-    基于文件的跨进程任务状态管理（gunicorn 多 worker 安全）
+    Task manager
+    File-based cross-process task state (gunicorn multi-worker safe)
     """
 
     TASKS_DIR = os.path.join(Config.UPLOAD_FOLDER, "tasks")
@@ -89,7 +89,7 @@ class TaskManager:
     _init_lock = threading.Lock()
 
     def __new__(cls):
-        """单例模式"""
+        """Singleton"""
         if cls._instance is None:
             with cls._init_lock:
                 if cls._instance is None:
@@ -141,7 +141,7 @@ class TaskManager:
         ]
 
     def _with_locked_task(self, task_id: str, mutator: Callable[[Task], None]) -> bool:
-        """在独占锁下读取、修改并保存任务。"""
+        """Read, mutate, and save task under exclusive lock."""
         self._ensure_tasks_dir()
         lock_path = self._get_lock_path(task_id)
         with open(lock_path, "a+", encoding="utf-8") as lock_f:
@@ -158,14 +158,14 @@ class TaskManager:
 
     def create_task(self, task_type: str, metadata: Optional[Dict] = None) -> str:
         """
-        创建新任务
+        Create a new task
 
         Args:
-            task_type: 任务类型
-            metadata: 额外元数据
+            task_type: Task type
+            metadata: Optional metadata
 
         Returns:
-            任务ID
+            Task ID
         """
         task_id = str(uuid.uuid4())
         now = datetime.now()
@@ -183,7 +183,7 @@ class TaskManager:
         return task_id
 
     def get_task(self, task_id: str) -> Optional[Task]:
-        """获取任务"""
+        """Get task by ID"""
         return self._load_task(task_id)
 
     def find_active_task_for_simulation(
@@ -191,7 +191,7 @@ class TaskManager:
         simulation_id: str,
         task_type: str,
     ) -> Optional[Task]:
-        """按 simulation_id 查找仍在进行中的任务（pending/processing）。"""
+        """Find pending/processing task for simulation_id."""
         for path in self._list_task_files():
             try:
                 with open(path, "r", encoding="utf-8") as f:
@@ -219,17 +219,17 @@ class TaskManager:
         metadata: Optional[Dict] = None,
     ):
         """
-        更新任务状态
+        Update task state
 
         Args:
-            task_id: 任务ID
-            status: 新状态
-            progress: 进度
-            message: 消息
-            result: 结果
-            error: 错误信息
-            progress_detail: 详细进度信息
-            metadata: 追加到任务上的元数据
+            task_id: Task ID
+            status: New status
+            progress: Progress
+            message: Message
+            result: Result payload
+            error: Error message
+            progress_detail: Detailed progress
+            metadata: Metadata to merge
         """
         def apply_updates(task: Task) -> None:
             task.updated_at = datetime.now()
@@ -251,7 +251,7 @@ class TaskManager:
         self._with_locked_task(task_id, apply_updates)
 
     def complete_task(self, task_id: str, result: Dict):
-        """标记任务完成"""
+        """Mark task completed"""
         self.update_task(
             task_id,
             status=TaskStatus.COMPLETED,
@@ -261,7 +261,7 @@ class TaskManager:
         )
 
     def fail_task(self, task_id: str, error: str):
-        """标记任务失败"""
+        """Mark task failed"""
         self.update_task(
             task_id,
             status=TaskStatus.FAILED,
@@ -270,7 +270,7 @@ class TaskManager:
         )
 
     def list_tasks(self, task_type: Optional[str] = None) -> list:
-        """列出任务"""
+        """List tasks"""
         tasks: List[Task] = []
         for path in self._list_task_files():
             try:
@@ -284,7 +284,7 @@ class TaskManager:
         return [task.to_dict() for task in sorted(tasks, key=lambda x: x.created_at, reverse=True)]
 
     def cleanup_old_tasks(self, max_age_hours: int = 24):
-        """清理旧任务"""
+        """Remove old completed/failed tasks"""
         cutoff = datetime.now() - timedelta(hours=max_age_hours)
 
         for path in self._list_task_files():

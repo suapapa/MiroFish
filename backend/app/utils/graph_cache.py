@@ -1,4 +1,4 @@
-"""图谱数据磁盘缓存：构建完成后持久化，避免重复全量查询 FalkorDB。"""
+"""On-disk graph data cache: persist after build to avoid repeated full FalkorDB scans."""
 
 from __future__ import annotations
 

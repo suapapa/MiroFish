@@ -1,20 +1,20 @@
 """
-Graphiti + FalkorDB 适配层（替代 Zep Cloud）
+Graphiti + FalkorDB adapter layer (replaces Zep Cloud)
 
-本模块用一个本地自托管的 Graphiti（时序知识图谱引擎，后端为 FalkorDB）
-来替换原先依赖的 Zep Cloud 服务，并对外暴露一套与 Zep SDK 兼容的同步接口
-（`client.graph.*`），从而让其余业务代码（graph_builder / zep_tools /
-zep_entity_reader / zep_graph_memory_updater / oasis_profile_generator）
-几乎无需改动即可切换。
+This module uses a locally self-hosted Graphiti (temporal knowledge graph engine,
+FalkorDB backend) instead of the former Zep Cloud service, and exposes a Zep SDK-
+compatible synchronous interface (`client.graph.*`) so the rest of the codebase
+(graph_builder / zep_tools / zep_entity_reader / zep_graph_memory_updater /
+oasis_profile_generator) can switch with minimal changes.
 
-设计要点：
-1. Graphiti 是全异步 API，这里用一个常驻后台事件循环线程把协程包装成同步调用，
-   方便在 Flask/gunicorn 的同步 worker 中使用。
-2. Zep 的 `graph_id` 映射为 Graphiti 的 `group_id`（多租户隔离）。
-3. Ontology（实体/边类型）按 graph_id 持久化到磁盘，并在每次写入 episode 时
-   重新构建 Graphiti 所需的 Pydantic 模型传入抽取流程。
-4. 返回对象用轻量包装类，提供与 Zep 一致的字段（uuid_/name/labels/summary/
-   fact/source_node_uuid/valid_at/invalid_at/expired_at 等）。
+Design notes:
+1. Graphiti is fully async; a dedicated background event-loop thread wraps coroutines
+   into sync calls for use in Flask/gunicorn sync workers.
+2. Zep `graph_id` maps to Graphiti `group_id` (multi-tenant isolation).
+3. Ontology (entity/edge types) is persisted per graph_id on disk and rebuilt into
+   Graphiti Pydantic models on each episode write for extraction.
+4. Return objects are lightweight wrappers with Zep-compatible fields (uuid_/name/
+   labels/summary/fact/source_node_uuid/valid_at/invalid_at/expired_at, etc.).
 """
 
 from __future__ import annotations
@@ -35,13 +35,13 @@ from .logger import get_logger
 logger = get_logger('mirofish.graphiti_adapter')
 
 
-# ── 与 zep_cloud 兼容的占位异常（zep_paging 等模块按此重试网络/IO 错误）──
+# ── zep_cloud-compatible placeholder exception (zep_paging retries network/IO errors) ──
 class InternalServerError(Exception):
-    """图存储端瞬态错误（兼容原 zep_cloud.InternalServerError 的重试语义）。"""
+    """Transient graph-store error (compatible with zep_cloud.InternalServerError retry semantics)."""
 
 
 def _empty_list_if_not_found(exc: Exception, resource: str) -> Optional[List[Any]]:
-    """Graphiti(FalkorDB) 在无节点/边时抛错；构建早期应视为空结果而非失败。"""
+    """Graphiti(FalkorDB) errors when no nodes/edges exist; treat as empty during early build."""
     message = str(exc).lower()
     if f"no {resource} found" in message:
         return []
@@ -56,7 +56,7 @@ def _fetch_group_items_with_retry(
     max_attempts: int = 3,
     retry_delay: float = 1.0,
 ) -> List[Any]:
-    """group 查询；'not found' 在写入 중可能是瞬态空结果，短暂重试后再视为空。"""
+    """Group query; 'not found' may be transient empty during writes — retry briefly then treat as empty."""
     last_exc: Exception | None = None
 
     for attempt in range(max_attempts):
@@ -80,9 +80,9 @@ def _fetch_group_items_with_retry(
     return []
 
 
-# ── 与 zep_cloud 兼容的数据载体 ──
+# ── zep_cloud-compatible data carriers ──
 class EpisodeData:
-    """对应 zep_cloud.EpisodeData：一段待写入图谱的文本。"""
+    """Corresponds to zep_cloud.EpisodeData: text segment to write into the graph."""
 
     def __init__(self, data: str, type: str = "text"):
         self.data = data
@@ -90,7 +90,7 @@ class EpisodeData:
 
 
 class EntityEdgeSourceTarget:
-    """对应 zep_cloud.EntityEdgeSourceTarget：边的源/目标实体类型约束。"""
+    """Corresponds to zep_cloud.EntityEdgeSourceTarget: source/target entity type constraints for edges."""
 
     def __init__(self, source: str = "Entity", target: str = "Entity"):
         self.source = source
@@ -98,11 +98,11 @@ class EntityEdgeSourceTarget:
 
 
 # ════════════════════════════════════════════════════════════════
-# 异步事件循环桥接：在后台线程跑一个常驻 loop，把协程变成同步调用
+# Async event-loop bridge: run a persistent loop in a background thread
 # ════════════════════════════════════════════════════════════════
 
 class _AsyncRunner:
-    """常驻后台事件循环，提供 run(coro) 同步执行协程。"""
+    """Persistent background event loop; provides run(coro) for synchronous coroutine execution."""
 
     _instance: Optional["_AsyncRunner"] = None
     _lock = threading.Lock()
@@ -142,7 +142,7 @@ def _run(coro, timeout: float = 120.0):
 
 
 def _run_with_graphiti(coro_factory, timeout: float = 120.0):
-    """在 worker 线程上初始化 Graphiti，再提交协程，避免 loop 线程内嵌套 _run 死锁。"""
+    """Initialize Graphiti on the worker thread, then submit the coroutine — avoids nested _run deadlock on the loop thread."""
     graphiti = _get_graphiti()
 
     async def _do():
@@ -152,7 +152,7 @@ def _run_with_graphiti(coro_factory, timeout: float = 120.0):
 
 
 # ════════════════════════════════════════════════════════════════
-# 轻量返回对象（兼容 Zep 字段访问）
+# Lightweight return objects (Zep-compatible field access)
 # ════════════════════════════════════════════════════════════════
 
 class _NodeView:
@@ -184,7 +184,7 @@ class _EdgeView:
 
 
 class _EpisodeView:
-    """add_batch 返回项 / episode.get 返回项。Graphiti 写入即处理完成。"""
+    """add_batch return item / episode.get return item. Graphiti completes processing on write."""
 
     def __init__(self, uuid: str = ''):
         self.uuid = uuid
@@ -199,10 +199,10 @@ class _SearchView:
 
 
 # ════════════════════════════════════════════════════════════════
-# Ontology 管理：按 graph_id 持久化 + 动态构建 Graphiti Pydantic 模型
+# Ontology management: persist per graph_id + build Graphiti Pydantic models dynamically
 # ════════════════════════════════════════════════════════════════
 
-# Graphiti/图存储保留字段，不能作为实体/边的属性名
+# Graphiti/graph-store reserved fields — cannot be used as entity/edge attribute names
 _RESERVED_NAMES = {
     'uuid', 'name', 'group_id', 'name_embedding', 'summary',
     'created_at', 'labels', 'attributes', 'fact', 'episodes',
@@ -228,7 +228,7 @@ def _edge_class_name(name: str) -> str:
 
 
 def _build_entity_types(ontology: Dict[str, Any]) -> Dict[str, type]:
-    """从本体定义构建 Graphiti 实体类型（Pydantic BaseModel 子类）。"""
+    """Build Graphiti entity types (Pydantic BaseModel subclasses) from ontology definitions."""
     entity_types: Dict[str, type] = {}
     for entity_def in ontology.get("entity_types", []) or []:
         if not isinstance(entity_def, dict):
@@ -256,7 +256,7 @@ def _build_entity_types(ontology: Dict[str, Any]) -> Dict[str, type]:
 
 
 def _build_edge_types(ontology: Dict[str, Any]) -> tuple[Dict[str, type], Dict[tuple, List[str]]]:
-    """从本体定义构建 Graphiti 边类型与 edge_type_map。"""
+    """Build Graphiti edge types and edge_type_map from ontology definitions."""
     edge_types: Dict[str, type] = {}
     edge_type_map: Dict[tuple, List[str]] = {}
     for edge_def in ontology.get("edge_types", []) or []:
@@ -292,7 +292,7 @@ def _build_edge_types(ontology: Dict[str, Any]) -> tuple[Dict[str, type], Dict[t
 
 
 class _OntologyStore:
-    """进程内缓存 + 磁盘持久化的本体仓库。"""
+    """In-process cache + disk-persisted ontology store."""
 
     def __init__(self):
         self._cache: Dict[str, Dict[str, Any]] = {}
@@ -352,7 +352,7 @@ _ontology_store = _OntologyStore()
 
 
 # ════════════════════════════════════════════════════════════════
-# Graphiti 单例
+# Graphiti singleton
 # ════════════════════════════════════════════════════════════════
 
 _graphiti = None
@@ -360,7 +360,7 @@ _graphiti_lock = threading.Lock()
 
 
 def _create_graphiti():
-    """惰性创建 Graphiti 实例（FalkorDB 驱动 + OpenAI 兼容 LLM/Embedder）。"""
+    """Lazily create Graphiti instance (FalkorDB driver + OpenAI-compatible LLM/Embedder)."""
     from graphiti_core import Graphiti
     from graphiti_core.driver.falkordb_driver import FalkorDriver
     from graphiti_core.llm_client.config import LLMConfig
@@ -383,12 +383,14 @@ def _create_graphiti():
         small_model=graphiti_model,
     )
 
-    # 选择 LLM 客户端：
-    # OpenAIClient 依赖 OpenAI 专有的 Responses API（responses.parse），第三方兼容端点
-    # （如阿里云 qwen/dashscope）无法支持，会返回截断/非法 JSON 导致实体/边抽取失败：
-    #   "Invalid JSON: EOF while parsing a string" / "Source entity not found in nodes"。
-    # 因此默认使用 OpenAIGenericClient（标准 /chat/completions）。其 structured output
-    # 默认优先走 json_schema；仅当服务商明确不支持时再通过环境变量回退到 json_object。
+    # Choose LLM client:
+    # OpenAIClient relies on OpenAI's proprietary Responses API (responses.parse); third-party
+    # compatible endpoints (e.g. Alibaba qwen/dashscope) cannot support it and return truncated/
+    # invalid JSON causing entity/edge extraction to fail:
+    #   "Invalid JSON: EOF while parsing a string" / "Source entity not found in nodes".
+    # Therefore default to OpenAIGenericClient (standard /chat/completions). Its structured
+    # output prefers json_schema by default; fall back to json_object only when the provider
+    # explicitly does not support json_schema (via env var).
     if Config.GRAPHITI_LLM_CLIENT == 'openai':
         from graphiti_core.llm_client.openai_client import OpenAIClient
         llm_client = OpenAIClient(config=llm_config)
@@ -414,7 +416,7 @@ def _create_graphiti():
         )
     )
 
-    # cross-encoder 复用 LLM 做重排；搜索默认走 RRF，不强依赖它
+    # cross-encoder reuses LLM for reranking; search defaults to RRF and does not strictly depend on it
     cross_encoder = OpenAIRerankerClient(config=llm_config)
 
     graphiti = Graphiti(
@@ -424,7 +426,7 @@ def _create_graphiti():
         cross_encoder=cross_encoder,
     )
 
-    # 构建索引/约束（幂等）
+    # Build indices/constraints (idempotent)
     _run(graphiti.build_indices_and_constraints())
     logger.info("Graphiti(FalkorDB) initialized")
     return graphiti
@@ -440,19 +442,19 @@ def _get_graphiti():
 
 
 # ════════════════════════════════════════════════════════════════
-# 与 Zep SDK 兼容的命名空间
+# Zep SDK-compatible namespaces
 # ════════════════════════════════════════════════════════════════
 
 class _EpisodeNamespace:
-    """对应 zep_cloud client.graph.episode。"""
+    """Corresponds to zep_cloud client.graph.episode."""
 
     def get(self, uuid_: str = '', **kwargs) -> _EpisodeView:
-        # Graphiti 的 add_episode 是同步完成的，episode 写入即已处理
+        # Graphiti add_episode completes synchronously — episode is processed on write
         return _EpisodeView(uuid=uuid_)
 
 
 class _NodeNamespace:
-    """对应 zep_cloud client.graph.node。"""
+    """Corresponds to zep_cloud client.graph.node."""
 
     def get_by_graph_id(
         self,
@@ -495,7 +497,7 @@ class _NodeNamespace:
 
 
 class _EdgeNamespace:
-    """对应 zep_cloud client.graph.edge。"""
+    """Corresponds to zep_cloud client.graph.edge."""
 
     def get_by_graph_id(
         self,
@@ -520,21 +522,21 @@ class _EdgeNamespace:
 
 
 class _GraphNamespace:
-    """对应 zep_cloud client.graph。"""
+    """Corresponds to zep_cloud client.graph."""
 
     def __init__(self):
         self.episode = _EpisodeNamespace()
         self.node = _NodeNamespace()
         self.edge = _EdgeNamespace()
 
-    # ── 图谱生命周期 ──
+    # ── Graph lifecycle ──
     def create(self, graph_id: str = '', name: str = '', description: str = '', **kwargs):
-        """Graphiti 中 group 是惰性的，这里仅确保实例就绪并返回标识。"""
+        """Groups are lazy in Graphiti; ensure instance is ready and return identifier."""
         _get_graphiti()
         return _EpisodeView(uuid=graph_id)
 
     def delete(self, graph_id: str = '', **kwargs):
-        """删除该 group_id 下的全部节点/边（及其本体定义）。"""
+        """Delete all nodes/edges (and ontology) under this group_id."""
         async def _do(g):
             await g.driver.execute_query(
                 "MATCH (n {group_id: $gid}) DETACH DELETE n",
@@ -549,12 +551,12 @@ class _GraphNamespace:
             delete_graph_cache(graph_id)
 
     def set_ontology(self, graph_ids: Optional[List[str]] = None, ontology: Optional[Dict[str, Any]] = None, **kwargs):
-        """保存本体定义（按 graph_id 持久化），写入 episode 时自动应用。"""
+        """Save ontology definitions (persisted per graph_id); applied automatically on episode write."""
         ontology = ontology or {}
         for gid in (graph_ids or []):
             _ontology_store.save(gid, ontology)
 
-    # ── 写入 ──
+    # ── Writes ──
     def _add_episode(self, graph_id: str, text: str, name: str = "episode"):
         from graphiti_core.nodes import EpisodeType
 
@@ -588,7 +590,7 @@ class _GraphNamespace:
             results.append(self._add_episode(graph_id, data, name=f"episode_{i}"))
         return results
 
-    # ── 检索 ──
+    # ── Retrieval ──
     def search(
         self,
         graph_id: str = '',
@@ -623,15 +625,15 @@ class _GraphNamespace:
 
 
 class GraphitiClient:
-    """对应 zep_cloud.client.Zep 的入口对象。
+    """Entry object corresponding to zep_cloud.client.Zep.
 
-    用法保持一致：client = GraphitiClient(); client.graph.search(...)。
-    `api_key` 参数仅为兼容旧签名，自托管模式下忽略。
+    Usage unchanged: client = GraphitiClient(); client.graph.search(...).
+    `api_key` is kept for backward-compatible signature only; ignored in self-hosted mode.
     """
 
     def __init__(self, api_key: Optional[str] = None, **kwargs):
         self.graph = _GraphNamespace()
 
 
-# 兼容别名：旧代码以 `from zep_cloud.client import Zep` 导入
+# Compatibility alias: legacy code imports via `from zep_cloud.client import Zep`
 Zep = GraphitiClient

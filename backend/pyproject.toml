@@ -9,35 +9,35 @@ authors = [
 ]
 
 dependencies = [
-    # 核心框架
+    # Core framework
     "flask>=3.0.0",
     "flask-cors>=6.0.0",
-    # 生产 WSGI 服务器
+    # Production WSGI server
     "gunicorn>=23.0.0",
     
-    # LLM 相关
+    # LLM
     "openai>=1.0.0",
     
-    # 知识图谱（Graphiti + FalkorDB，自托管，替代 Zep Cloud）
+    # Knowledge graph (Graphiti + FalkorDB, self-hosted, replaces Zep Cloud)
     "graphiti-core[falkordb]>=0.23.0",
     
-    # OASIS 社交媒体模拟
+    # OASIS social media simulation
     "camel-oasis==0.2.5",
     "camel-ai==0.2.78",
-    # torch 仅作为 camel-oasis -> sentence-transformers 的传递依赖被使用，
-    # 服务器部署无 GPU，固定为 CPU 版以避免拉取数 GB 的 NVIDIA CUDA 包（见 tool.uv 配置）
+    # torch is only a transitive dep via camel-oasis -> sentence-transformers;
+    # server has no GPU, so pin CPU build to avoid multi-GB NVIDIA CUDA packages (see tool.uv)
     "torch>=2.0.0",
     
-    # 文件处理
+    # File processing
     "PyMuPDF>=1.24.0",
-    # 编码检测（支持非UTF-8编码的文本文件）
+    # Encoding detection (non-UTF-8 text files)
     "charset-normalizer>=3.0.0",
     "chardet>=5.0.0",
     
-    # 工具库
+    # Utilities
     "python-dotenv>=1.0.0",
     "pydantic>=2.0.0",
-    # YAML 解析（LLM 提示词管理）
+    # YAML parsing (LLM prompt management)
     "PyYAML>=6.0",
 ]
 
@@ -52,13 +52,13 @@ dev = [
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
-# 依赖冲突解决：camel-oasis 硬钉 neo4j==5.23.0，而 graphiti-core 需要 neo4j>=5.26.0。
-# 本项目使用 FalkorDB（非 Neo4j）作为图存储，neo4j 仅为传递依赖、运行时不会被使用，
-# 因此统一覆盖为 graphiti 兼容的版本。
+# Dependency conflict: camel-oasis pins neo4j==5.23.0; graphiti-core needs neo4j>=5.26.0.
+# This project uses FalkorDB (not Neo4j) for graph storage; neo4j is transitive only and unused at runtime,
+# so override to a graphiti-compatible version.
 [tool.uv]
 override-dependencies = ["neo4j>=5.26.0"]
 
-# torch 固定使用 PyTorch 官方 CPU 源（避免在 linux/x86_64 上拉取 NVIDIA CUDA 包）
+# Pin torch to PyTorch official CPU index (avoid NVIDIA CUDA packages on linux/x86_64)
 [[tool.uv.index]]
 name = "pytorch-cpu"
 url = "https://download.pytorch.org/whl/cpu"
