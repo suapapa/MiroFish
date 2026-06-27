@@ -16,20 +16,20 @@ from typing import Any, Dict
 
 import yaml
 
-_PROMPTS_DIR = os.path.join(os.path.dirname(__file__), '..', 'prompts')
+_PROMPTS_DIR = os.path.join(os.path.dirname(__file__), "..", "prompts")
 
 # Select language-specific prompt file.
 #  - PROMPT_LANG env (e.g. en / ko / zh) chooses which yaml to load.
 #  - Uses prompt_{lang}.yaml when present, else default Chinese prompts.yaml.
-#  - zh uses legacy prompts.yaml as the default.
-_DEFAULT_PROMPTS_FILE = 'prompts.yaml'
+#  - en uses legacy prompts.yaml as the default.
+_DEFAULT_PROMPTS_FILE = "prompts.yaml"
 
 
 def _resolve_prompts_path() -> str:
-    lang = (os.environ.get('PROMPT_LANG', 'zh') or 'zh').strip().lower()
+    lang = (os.environ.get("PROMPT_LANG", "en") or "en").strip().lower()
     candidates = []
-    if lang and lang != 'zh':
-        candidates.append(os.path.join(_PROMPTS_DIR, f'prompt_{lang}.yaml'))
+    if lang and lang != "en":
+        candidates.append(os.path.join(_PROMPTS_DIR, f"prompts_{lang}.yaml"))
     candidates.append(os.path.join(_PROMPTS_DIR, _DEFAULT_PROMPTS_FILE))
     for path in candidates:
         if os.path.exists(path):
@@ -41,7 +41,7 @@ def _resolve_prompts_path() -> str:
 def _load_prompts() -> Dict[str, Any]:
     """Load and cache the selected language prompt yaml once."""
     prompts_path = _resolve_prompts_path()
-    with open(prompts_path, 'r', encoding='utf-8') as f:
+    with open(prompts_path, "r", encoding="utf-8") as f:
         data = yaml.safe_load(f)
     if not isinstance(data, dict):
         raise ValueError(f"Invalid prompt file format: {prompts_path}")
@@ -63,7 +63,7 @@ def get_prompt(key: str) -> str:
         TypeError: when the value is not a string
     """
     node: Any = _load_prompts()
-    for part in key.split('.'):
+    for part in key.split("."):
         if not isinstance(node, dict) or part not in node:
             raise KeyError(f"Prompt key not found: {key}")
         node = node[part]

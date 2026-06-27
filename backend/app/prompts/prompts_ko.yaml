@@ -1,5 +1,5 @@
 # ============================================================
-# MiroFish Backend LLM Prompt Definitions (Korean)
+# Go-racle Backend LLM Prompt Definitions (Korean)
 # ============================================================
 # Loaded in code via app/utils/prompts.py get_prompt("namespace.key").
 #
@@ -382,7 +382,6 @@ report_agent:
 
   chat_observation_suffix: "\n\n질문에 간결하게 답하라."
 
-
 ontology:
   # Ontology generation system prompt
   system: |
@@ -560,7 +559,6 @@ ontology:
     4. 모든 엔티티 유형은 현실에서 발언할 수 있는 주체여야 하며, 추상 개념일 수 없다
     5. 속성명은 name, uuid, group_id 등 예약어를 사용할 수 없으며, full_name, org_name 등으로 대체한다
 
-
 simulation_config:
   # ── Time settings ──
   time_user: |-
@@ -688,7 +686,6 @@ simulation_config:
 
   agent_system_suffix: "IMPORTANT: The 'stance' field value MUST be one of the English strings: 'supportive', 'opposing', 'neutral', 'observer'. All JSON field names and numeric values must remain unchanged. Only natural language text fields should use the specified language."
 
-
 oasis_profile:
   # User-profile generation system prompt (the language instruction is appended after this)
   system_base: "너는 소셜미디어 사용자 화상 생성 전문가다. 여론 시뮬레이션을 위한 상세하고 사실적인 페르소나를 생성하며, 이미 존재하는 현실 상황을 최대한 복원한다. 반드시 유효한 JSON 형식을 반환해야 하며, 모든 문자열 값에는 이스케이프되지 않은 줄바꿈 문자가 포함될 수 없다."
@@ -719,7 +716,7 @@ oasis_profile:
     3. age: 나이 숫자(반드시 정수)
     4. gender: 성별, 반드시 영문: "male" 또는 "female"
     5. mbti: MBTI 유형(예: INTJ, ENFP 등)
-    6. country: 국가(중문 사용, 예: "中国")
+    6. country: 국가(한국어 사용, 예: "한국")
     7. profession: 직업
     8. interested_topics: 관심 화제 배열
 
@@ -756,7 +753,7 @@ oasis_profile:
     3. age: 30으로 고정(기관 계정의 가상 나이)
     4. gender: "other" 로 고정(기관 계정은 비개인을 나타내기 위해 other 사용)
     5. mbti: MBTI 유형, 계정 스타일 묘사에 사용. 예: ISTJ 는 엄격하고 보수적임을 나타냄
-    6. country: 국가(중문 사용, 예: "中国")
+    6. country: 국가(한국어 사용, 예: "한국")
     7. profession: 기관 기능 설명
     8. interested_topics: 관심 영역 배열
 
@@ -766,7 +763,6 @@ oasis_profile:
     - {language_instruction} (gender 필드는 반드시 영문 "other" 사용)
     - age 는 정수 30이어야 하고, gender 는 문자열 "other" 여야 한다
     - 기관 계정의 발언은 그 신원 포지셔닝에 부합해야 한다
-
 
 zep_tools:
   # ── Question decomposition ──
@@ -866,7 +862,6 @@ zep_tools:
     {interview_texts}
 
     인터뷰 요약을 생성하라.
-
 
 interview:
   # simulation.py: prefix for single-row interview optimization
