@@ -108,10 +108,10 @@ class Config:
         """Validate required configuration"""
         errors: list[str] = []
         if not cls.LLM_API_KEY:
-            errors.append("LLM_API_KEY 未配置")
+            errors.append("LLM_API_KEY is not configured")
         if not cls.EMBEDDER_API_KEY:
-            errors.append("EMBEDDER_API_KEY 未配置（嵌入服务，默认复用 LLM_API_KEY）")
+            errors.append("EMBEDDER_API_KEY is not configured (embedding service; defaults to LLM_API_KEY)")
         # Production (non-debug) requires explicit SECRET_KEY
         if not cls.DEBUG and not cls.SECRET_KEY:
-            errors.append("SECRET_KEY 未配置（生产环境必填）")
+            errors.append("SECRET_KEY is not configured (required in production)")
         return errors

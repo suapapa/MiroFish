@@ -1154,7 +1154,7 @@ class SimulationRunner:
                     os.remove(file_path)
                     cleaned_files.append(filename)
                 except Exception as e:
-                    errors.append(f"删除 {filename} 失败: {str(e)}")
+                    errors.append(f"Failed to delete {filename}: {str(e)}")
         
         # Clean action logs in the platform directory
         for dir_name in dirs_to_clean:
@@ -1166,7 +1166,7 @@ class SimulationRunner:
                         os.remove(actions_file)
                         cleaned_files.append(f"{dir_name}/actions.jsonl")
                     except Exception as e:
-                        errors.append(f"删除 {dir_name}/actions.jsonl 失败: {str(e)}")
+                        errors.append(f"Failed to delete {dir_name}/actions.jsonl: {str(e)}")
         
         # Clean up running status in memory
         if simulation_id in cls._run_states:
