@@ -56,9 +56,9 @@ class GraphBuilderService:
         text: str,
         ontology: Dict[str, Any],
         graph_name: str = "MiroFish Graph",
-        chunk_size: int = 300,
-        chunk_overlap: int = 50,
-        batch_size: int = 3
+        chunk_size: int = Config.DEFAULT_CHUNK_SIZE,
+        chunk_overlap: int = Config.DEFAULT_CHUNK_OVERLAP,
+        batch_size: int = Config.DEFAULT_GRAPH_BUILD_BATCH_SIZE
     ) -> str:
         """
         异步构建图谱
@@ -214,7 +214,7 @@ class GraphBuilderService:
         self,
         graph_id: str,
         chunks: List[str],
-        batch_size: int = 3,
+        batch_size: int = Config.DEFAULT_GRAPH_BUILD_BATCH_SIZE,
         progress_callback: Optional[Callable] = None
     ) -> List[str]:
         """分批添加文本到图谱，返回所有 episode 的 uuid 列表"""
