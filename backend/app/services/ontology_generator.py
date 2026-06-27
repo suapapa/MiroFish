@@ -5,26 +5,18 @@
 
 import json
 import logging
-import re
 from typing import Dict, Any, List, Optional
 from ..utils.llm_client import LLMClient
 from ..utils.locale import get_language_instruction
 from ..utils.prompts import get_prompt
+from ..utils.ontology_utils import normalize_ontology, to_pascal_case
 
 logger = logging.getLogger(__name__)
 
 
 def _to_pascal_case(name: str) -> str:
     """将任意格式的名称转换为 PascalCase（如 'works_for' -> 'WorksFor', 'person' -> 'Person'）"""
-    # 按非字母数字字符分割
-    parts = re.split(r'[^a-zA-Z0-9]+', name)
-    # 再按 camelCase 边界分割（如 'camelCase' -> ['camel', 'Case']）
-    words = []
-    for part in parts:
-        words.extend(re.sub(r'([a-z])([A-Z])', r'\1_\2', part).split('_'))
-    # 每个词首字母大写，过滤空串
-    result = ''.join(word.capitalize() for word in words if word)
-    return result if result else 'Unknown'
+    return to_pascal_case(name)
 
 
 # 本体生成的系统提示词
@@ -119,6 +111,7 @@ class OntologyGenerator:
     
     def _validate_and_process(self, result: Dict[str, Any]) -> Dict[str, Any]:
         """验证和后处理结果"""
+        result = normalize_ontology(result)
         
         # 确保必要字段存在
         if "entity_types" not in result:

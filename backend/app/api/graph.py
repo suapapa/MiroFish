@@ -16,6 +16,7 @@ from ..services.text_processor import TextProcessor
 from ..utils.file_parser import FileParser
 from ..utils.logger import get_logger
 from ..utils.locale import t, get_locale, set_locale
+from ..utils.ontology_utils import normalize_ontology, validate_ontology
 from ..models.task import TaskManager, TaskStatus
 from ..models.project import ProjectManager, ProjectStatus
 
@@ -343,12 +344,26 @@ def build_graph():
             }), 400
         
         # 获取本体
-        ontology = project.ontology
-        if not ontology:
+        ontology = normalize_ontology(project.ontology)
+        if not ontology.get("entity_types"):
             return jsonify({
                 "success": False,
                 "error": t('api.ontologyNotFound')
             }), 400
+
+        ontology_error = validate_ontology(ontology)
+        if ontology_error:
+            return jsonify({
+                "success": False,
+                "error": t(f'api.{ontology_error}')
+            }), 400
+
+        project.ontology = {
+            "entity_types": ontology.get("entity_types", []),
+            "edge_types": ontology.get("edge_types", []),
+        }
+        if ontology.get("analysis_summary"):
+            project.analysis_summary = ontology["analysis_summary"]
         
         # 创建异步任务
         task_manager = TaskManager()
@@ -460,7 +475,7 @@ def build_graph():
                     message=t('progress.fetchingGraphData'),
                     progress=95
                 )
-                graph_data = builder.get_graph_data(graph_id)
+                graph_data = builder.get_graph_data(graph_id, use_cache=False)
                 
                 # 更新项目状态
                 project.status = ProjectStatus.GRAPH_COMPLETED

@@ -190,6 +190,9 @@ def _build_entity_types(ontology: Dict[str, Any]) -> Dict[str, type]:
     """从本体定义构建 Graphiti 实体类型（Pydantic BaseModel 子类）。"""
     entity_types: Dict[str, type] = {}
     for entity_def in ontology.get("entity_types", []) or []:
+        if not isinstance(entity_def, dict):
+            logger.warning("Skipping non-dict entity type definition")
+            continue
         name = (entity_def.get("name") or "").strip()
         if not name:
             logger.warning("Skipping entity type definition missing name")
@@ -197,6 +200,8 @@ def _build_entity_types(ontology: Dict[str, Any]) -> Dict[str, type]:
         description = entity_def.get("description", f"A {name} entity.")
         fields: Dict[str, Any] = {}
         for attr_def in entity_def.get("attributes", []) or []:
+            if not isinstance(attr_def, dict):
+                continue
             raw_name = (attr_def.get("name") or "").strip()
             if not raw_name:
                 continue
@@ -214,6 +219,9 @@ def _build_edge_types(ontology: Dict[str, Any]) -> tuple[Dict[str, type], Dict[t
     edge_types: Dict[str, type] = {}
     edge_type_map: Dict[tuple, List[str]] = {}
     for edge_def in ontology.get("edge_types", []) or []:
+        if not isinstance(edge_def, dict):
+            logger.warning("Skipping non-dict edge type definition")
+            continue
         name = (edge_def.get("name") or "").strip()
         if not name:
             logger.warning("Skipping edge type definition missing name")
@@ -221,6 +229,8 @@ def _build_edge_types(ontology: Dict[str, Any]) -> tuple[Dict[str, type], Dict[t
         description = edge_def.get("description", f"A {name} relationship.")
         fields: Dict[str, Any] = {}
         for attr_def in edge_def.get("attributes", []) or []:
+            if not isinstance(attr_def, dict):
+                continue
             raw_name = (attr_def.get("name") or "").strip()
             if not raw_name:
                 continue
@@ -232,6 +242,8 @@ def _build_edge_types(ontology: Dict[str, Any]) -> tuple[Dict[str, type], Dict[t
         edge_types[name] = model
 
         for st in edge_def.get("source_targets", []) or []:
+            if not isinstance(st, dict):
+                continue
             key = (st.get("source", "Entity"), st.get("target", "Entity"))
             edge_type_map.setdefault(key, []).append(name)
 

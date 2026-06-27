@@ -751,7 +751,12 @@ const startGraphPolling = () => {
 // 手动刷新图谱
 const refreshGraph = async () => {
   graphLoading.value = true
-  await fetchGraphData()
+  const graphId = currentGraphId || projectData.value?.graph_id
+  if (graphId) {
+    await loadGraph(graphId, { refresh: true })
+  } else {
+    await fetchGraphData()
+  }
   graphLoading.value = false
 }
 
@@ -776,7 +781,7 @@ const fetchGraphData = async () => {
 
   isGraphDataRequestInFlight = true
   try {
-    const graphResponse = await getGraphData(graphId)
+    const graphResponse = await getGraphData(graphId, { refresh: currentPhase.value === 1 })
     
     if (graphResponse.success && graphResponse.data) {
       const newData = graphResponse.data
@@ -899,11 +904,11 @@ const stopPolling = () => {
 }
 
 // 加载图谱数据
-const loadGraph = async (graphId) => {
+const loadGraph = async (graphId, { refresh = false } = {}) => {
   try {
     graphLoading.value = true
     syncGraphId(graphId)
-    const response = await getGraphData(graphId)
+    const response = await getGraphData(graphId, { refresh: refresh || currentPhase.value === 1 })
     
     if (response.success) {
       graphData.value = response.data

@@ -389,7 +389,8 @@ const fetchGraphData = async () => {
 
   isGraphDataRequestInFlight = true
   try {
-    const gRes = await getGraphData(graphId)
+    // 구축 중에는 캐시를 우회해 FalkorDB 최신 노드/엣지를 반영
+    const gRes = await getGraphData(graphId, { refresh: currentPhase.value === 1 })
     if (gRes.success) {
       graphData.value = gRes.data
       const nodeCount = gRes.data.node_count || gRes.data.nodes?.length || 0
@@ -480,12 +481,12 @@ const pollTaskStatus = async (taskId) => {
   }
 }
 
-const loadGraph = async (graphId) => {
+const loadGraph = async (graphId, { refresh = false } = {}) => {
   graphLoading.value = true
   syncGraphId(graphId)
   addLog(`Loading full graph data: ${graphId}`)
   try {
-    const res = await getGraphData(graphId)
+    const res = await getGraphData(graphId, { refresh: refresh || currentPhase.value === 1 })
     if (res.success) {
       graphData.value = res.data
       addLog('Graph data loaded successfully.')
@@ -503,7 +504,7 @@ const refreshGraph = () => {
   const graphId = currentGraphId || projectData.value?.graph_id
   if (graphId) {
     addLog('Manual graph refresh triggered.')
-    void loadGraph(graphId)
+    void loadGraph(graphId, { refresh: true })
   }
 }
 
