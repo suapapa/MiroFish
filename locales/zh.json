@@ -95,7 +95,11 @@
     "creating": "创建中...",
     "enterEnvSetup": "进入环境搭建",
     "createSimulationFailed": "创建模拟失败: {error}",
-    "createSimulationException": "创建模拟异常: {error}"
+    "createSimulationException": "创建模拟异常: {error}",
+    "buildFailed": "图谱构建失败",
+    "buildFailedGeneric": "图谱构建过程中发生错误",
+    "retryBuild": "重新构建图谱",
+    "retryingBuild": "正在重新启动图谱构建..."
   },
   "step2": {
     "simInstanceInit": "模拟实例初始化",
@@ -413,6 +417,7 @@
     "fetchingGraphInfo": "获取图谱信息...",
     "sendingBatch": "发送第 {current}/{total} 批数据 ({chunks} 块)...",
     "batchFailed": "批次 {batch} 发送失败: {error}",
+    "batchRetry": "批次 {batch} 失败，{delay}秒后重试（第 {attempt} 次）...",
     "noEpisodesWait": "无需等待（没有 episode）",
     "waitingEpisodes": "开始等待 {count} 个文本块处理...",
     "episodesTimeout": "部分文本块超时，已完成 {completed}/{total}",

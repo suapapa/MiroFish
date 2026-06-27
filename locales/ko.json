@@ -95,7 +95,11 @@
     "creating": "생성 중...",
     "enterEnvSetup": "환경 설정으로 이동",
     "createSimulationFailed": "시뮬레이션 생성 실패: {error}",
-    "createSimulationException": "시뮬레이션 생성 오류: {error}"
+    "createSimulationException": "시뮬레이션 생성 오류: {error}",
+    "buildFailed": "그래프 구축 실패",
+    "buildFailedGeneric": "그래프 구축 중 오류가 발생했습니다",
+    "retryBuild": "그래프 다시 구축",
+    "retryingBuild": "그래프 구축을 다시 시작하는 중..."
   },
   "step2": {
     "simInstanceInit": "시뮬레이션 인스턴스 초기화",
@@ -413,6 +417,7 @@
     "fetchingGraphInfo": "그래프 정보 가져오는 중...",
     "sendingBatch": "배치 {current}/{total} 전송 중 ({chunks}개 청크)...",
     "batchFailed": "배치 {batch} 실패: {error}",
+    "batchRetry": "배치 {batch} 실패, {delay}초 후 재시도 ({attempt}회)...",
     "noEpisodesWait": "대기할 에피소드가 없습니다",
     "waitingEpisodes": "텍스트 청크 {count}개 처리 대기 중...",
     "episodesTimeout": "일부 청크 처리 시간 초과, {completed}/{total} 완료",

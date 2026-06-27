@@ -95,7 +95,11 @@
     "creating": "Creating...",
     "enterEnvSetup": "Enter Environment Setup",
     "createSimulationFailed": "Failed to create simulation: {error}",
-    "createSimulationException": "Simulation creation error: {error}"
+    "createSimulationException": "Simulation creation error: {error}",
+    "buildFailed": "Graph build failed",
+    "buildFailedGeneric": "An error occurred during graph build",
+    "retryBuild": "Retry Graph Build",
+    "retryingBuild": "Restarting graph build..."
   },
   "step2": {
     "simInstanceInit": "Simulation Instance Initialization",
@@ -413,6 +417,7 @@
     "fetchingGraphInfo": "Fetching graph info...",
     "sendingBatch": "Sending batch {current}/{total} ({chunks} chunks)...",
     "batchFailed": "Batch {batch} failed: {error}",
+    "batchRetry": "Batch {batch} failed, retrying in {delay}s (attempt {attempt})...",
     "noEpisodesWait": "No episodes to wait for",
     "waitingEpisodes": "Waiting for {count} text chunks to process...",
     "episodesTimeout": "Some chunks timed out, {completed}/{total} completed",

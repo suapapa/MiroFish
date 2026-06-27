@@ -113,7 +113,8 @@
             <span class="step-title">{{ $t('step1.graphRagBuild') }}</span>
           </div>
           <div class="step-status">
-            <span v-if="currentPhase > 1" class="badge success">{{ $t('step1.ontologyCompleted') }}</span>
+            <span v-if="buildError" class="badge failed">{{ $t('common.failed') }}</span>
+            <span v-else-if="currentPhase > 1" class="badge success">{{ $t('step1.ontologyCompleted') }}</span>
             <span v-else-if="currentPhase === 1" class="badge processing">{{ buildProgress?.progress || 0 }}%</span>
             <span v-else class="badge pending">{{ $t('step1.ontologyPending') }}</span>
           </div>
@@ -139,6 +140,19 @@
               <span class="stat-value">{{ graphStats.types }}</span>
               <span class="stat-label">{{ $t('step1.schemaTypes') }}</span>
             </div>
+          </div>
+
+          <!-- Build error & retry -->
+          <div v-if="buildError" class="error-section">
+            <p class="error-message">{{ buildError }}</p>
+            <button
+              class="retry-btn"
+              :disabled="retryingBuild"
+              @click="$emit('retry-build')"
+            >
+              <span v-if="retryingBuild" class="spinner-sm"></span>
+              {{ retryingBuild ? $t('step1.retryingBuild') : $t('step1.retryBuild') }}
+            </button>
           </div>
         </div>
       </div>
@@ -201,10 +215,12 @@ const props = defineProps({
   ontologyProgress: Object,
   buildProgress: Object,
   graphData: Object,
-  systemLogs: { type: Array, default: () => [] }
+  systemLogs: { type: Array, default: () => [] },
+  buildError: { type: String, default: '' },
+  retryingBuild: { type: Boolean, default: false }
 })
 
-defineEmits(['next-step'])
+defineEmits(['next-step', 'retry-build'])
 
 const selectedOntologyItem = ref(null)
 const logContent = ref(null)
@@ -349,6 +365,7 @@ watch(() => props.systemLogs.length, () => {
 .badge.processing { background: #FF5722; color: #FFF; }
 .badge.accent { background: #FF5722; color: #FFF; }
 .badge.pending { background: #F5F5F5; color: #999; }
+.badge.failed { background: #FFEBEE; color: #C62828; }
 
 .api-note {
   font-family: 'JetBrains Mono', monospace;
@@ -598,6 +615,48 @@ watch(() => props.systemLogs.length, () => {
   text-transform: uppercase;
   margin-top: 4px;
   display: block;
+}
+
+.error-section {
+  margin-top: 16px;
+  padding: 12px;
+  background: #FFF5F5;
+  border: 1px solid #FFCDD2;
+  border-radius: 6px;
+}
+
+.error-message {
+  font-size: 12px;
+  color: #C62828;
+  line-height: 1.5;
+  margin: 0 0 12px;
+  word-break: break-word;
+}
+
+.retry-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: #C62828;
+  color: #FFF;
+  border: none;
+  padding: 10px 14px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.retry-btn:hover:not(:disabled) {
+  opacity: 0.85;
+}
+
+.retry-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 /* Step 03 Button */

@@ -20,7 +20,7 @@ export function generateOntology(formData) {
 
 /**
  * 构建图谱
- * @param {Object} data - 包含project_id, graph_name等
+ * @param {Object} data - 包含 project_id, graph_name, force(可选，强制重新构建) 等
  * @returns {Promise}
  */
 export function buildGraph(data) {
@@ -31,6 +31,18 @@ export function buildGraph(data) {
       data
     })
   )
+}
+
+/**
+ * 重置项目状态（用于重新构建图谱）
+ * @param {String} projectId - 项目ID
+ * @returns {Promise}
+ */
+export function resetProject(projectId) {
+  return service({
+    url: `/api/graph/project/${projectId}/reset`,
+    method: 'post'
+  })
 }
 
 /**

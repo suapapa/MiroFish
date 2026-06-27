@@ -239,27 +239,53 @@ class GraphBuilderService:
                 for chunk in batch_chunks
             ]
             
-            # 发送到Zep
-            try:
-                batch_result = self.client.graph.add_batch(
-                    graph_id=graph_id,
-                    episodes=episodes
-                )
-                
-                # 收集返回的 episode uuid
-                if batch_result and isinstance(batch_result, list):
-                    for ep in batch_result:
-                        ep_uuid = getattr(ep, 'uuid_', None) or getattr(ep, 'uuid', None)
-                        if ep_uuid:
-                            episode_uuids.append(ep_uuid)
-                
-                # 避免请求过快
-                time.sleep(1)
-                
-            except Exception as e:
-                if progress_callback:
-                    progress_callback(t('progress.batchFailed', batch=batch_num, error=str(e)), 0)
-                raise
+            # 发送到Zep（带重试）
+            max_batch_retries = 3
+            batch_result = None
+            last_batch_error = None
+
+            for attempt in range(max_batch_retries + 1):
+                try:
+                    batch_result = self.client.graph.add_batch(
+                        graph_id=graph_id,
+                        episodes=episodes
+                    )
+                    last_batch_error = None
+                    break
+                except Exception as e:
+                    last_batch_error = e
+                    if attempt >= max_batch_retries:
+                        if progress_callback:
+                            progress_callback(
+                                t('progress.batchFailed', batch=batch_num, error=str(e)),
+                                (i + len(batch_chunks)) / total_chunks
+                            )
+                        raise
+
+                    retry_delay = 2 ** attempt
+                    logger.warning(
+                        f"Batch {batch_num} attempt {attempt + 1} failed: {str(e)}, "
+                        f"retrying in {retry_delay}s..."
+                    )
+                    if progress_callback:
+                        progress_callback(
+                            t('progress.batchRetry', batch=batch_num, attempt=attempt + 1, delay=retry_delay),
+                            (i + len(batch_chunks)) / total_chunks
+                        )
+                    time.sleep(retry_delay)
+
+            if last_batch_error:
+                raise last_batch_error
+
+            # 收集返回的 episode uuid
+            if batch_result and isinstance(batch_result, list):
+                for ep in batch_result:
+                    ep_uuid = getattr(ep, 'uuid_', None) or getattr(ep, 'uuid', None)
+                    if ep_uuid:
+                        episode_uuids.append(ep_uuid)
+
+            # 避免请求过快
+            time.sleep(1)
         
         return episode_uuids
     

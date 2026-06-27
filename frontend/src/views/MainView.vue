@@ -59,7 +59,10 @@
           :buildProgress="buildProgress"
           :graphData="graphData"
           :systemLogs="systemLogs"
+          :buildError="error"
+          :retryingBuild="retryingBuild"
           @next-step="handleNextStep"
+          @retry-build="retryBuildGraph"
         />
         <!-- Step 2: 环境搭建 -->
         <Step2EnvSetup
@@ -109,6 +112,7 @@ const currentPhase = ref(-1) // -1: Upload, 0: Ontology, 1: Build, 2: Complete
 const ontologyProgress = ref(null)
 const buildProgress = ref(null)
 const systemLogs = ref([])
+const retryingBuild = ref(false)
 
 // Polling timers
 let pollTimer = null
@@ -138,7 +142,7 @@ const statusClass = computed(() => {
 })
 
 const statusText = computed(() => {
-  if (error.value) return 'Error'
+  if (error.value) return t('step1.buildFailed')
   if (currentPhase.value >= 2) return 'Ready'
   if (currentPhase.value === 1) return 'Building Graph'
   if (currentPhase.value === 0) return 'Generating Ontology'
@@ -294,7 +298,50 @@ const updatePhaseByStatus = (status) => {
     case 'ontology_generated': currentPhase.value = 0; break;
     case 'graph_building': currentPhase.value = 1; break;
     case 'graph_completed': currentPhase.value = 2; break;
-    case 'failed': error.value = 'Project failed'; break;
+    case 'failed':
+      currentPhase.value = 1
+      error.value = projectData.value?.error || t('step1.buildFailedGeneric')
+      break;
+  }
+}
+
+const retryBuildGraph = async () => {
+  if (retryingBuild.value || !currentProjectId.value) return
+
+  retryingBuild.value = true
+  error.value = ''
+  currentGraphId = null
+  graphData.value = null
+  buildProgress.value = { progress: 0, message: t('step1.retryingBuild') }
+  currentPhase.value = 1
+
+  if (projectData.value) {
+    projectData.value = {
+      ...projectData.value,
+      status: 'ontology_generated',
+      graph_id: null,
+      graph_build_task_id: null,
+      error: null
+    }
+  }
+
+  addLog(t('step1.retryingBuild'))
+
+  try {
+    const res = await buildGraph({ project_id: currentProjectId.value, force: true })
+    if (res.success) {
+      addLog(`Graph build task restarted. Task ID: ${res.data.task_id}`)
+      startGraphPolling()
+      startPollingTask(res.data.task_id)
+    } else {
+      error.value = res.error || t('step1.buildFailedGeneric')
+      addLog(`Error restarting build: ${error.value}`)
+    }
+  } catch (err) {
+    error.value = err.message || t('step1.buildFailedGeneric')
+    addLog(`Exception in retryBuildGraph: ${error.value}`)
+  } finally {
+    retryingBuild.value = false
   }
 }
 
@@ -389,6 +436,7 @@ const pollTaskStatus = async (taskId) => {
         addLog('Graph build task completed.')
         stopPolling()
         stopGraphPolling() // Stop polling, do final load
+        error.value = ''
         currentPhase.value = 2
         const completedGraphId = task.result?.graph_id || currentGraphId || projectData.value?.graph_id
 
@@ -413,8 +461,16 @@ const pollTaskStatus = async (taskId) => {
       } else if (task.status === 'failed') {
         stopPolling()
         stopGraphPolling()
-        error.value = task.error
-        addLog(`Graph build task failed: ${task.error}`)
+        error.value = task.message || task.error || t('step1.buildFailedGeneric')
+        if (projectData.value) {
+          projectData.value = {
+            ...projectData.value,
+            status: 'failed',
+            error: error.value
+          }
+        }
+        buildProgress.value = null
+        addLog(`Graph build task failed: ${error.value}`)
       }
     }
   } catch (e) {
