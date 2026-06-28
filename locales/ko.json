@@ -32,6 +32,13 @@
   "nav": {
     "visitGithub": "GitHub 페이지 방문"
   },
+  "a11y": {
+    "languageSwitcher": "언어 변경",
+    "scrollDown": "업로드 섹션으로 스크롤",
+    "removeFile": "{name} 제거",
+    "uploadFiles": "파일 업로드 (PDF, Markdown, 텍스트)",
+    "layoutSwitcher": "패널 레이아웃"
+  },
   "home": {
     "tagline": "간결하고 범용적인 군집 지능 엔진",
     "version": "/ v0.1-프리뷰",
@@ -75,7 +82,11 @@
     "layoutGraph": "그래프",
     "layoutSplit": "분할",
     "layoutWorkbench": "워크벤치",
-    "stepNames": ["그래프 구축", "환경 설정", "시뮬레이션 실행", "리포트 생성", "심층 인터랙션"]
+    "stepNames": ["그래프 구축", "환경 설정", "시뮬레이션 실행", "리포트 생성", "심층 인터랙션"],
+    "statusReady": "준비됨",
+    "statusBuildingGraph": "그래프 구축 중",
+    "statusGeneratingOntology": "온톨로지 생성 중",
+    "statusInitializing": "초기화 중"
   },
   "step1": {
     "ontologyGeneration": "온톨로지 생성",

@@ -1217,7 +1217,6 @@ input:checked + .slider:before {
   left: 50%;
   transform: translateX(-50%);
   background: rgba(0, 0, 0, 0.65);
-  backdrop-filter: blur(8px);
   color: #fff;
   padding: 10px 20px;
   border-radius: 30px;

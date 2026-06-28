@@ -1,5 +1,5 @@
 <template>
-  <div class="main-view">
+  <div class="main-view" :class="`view-mode-${viewMode}`">
     <!-- Header -->
     <header class="app-header">
       <div class="header-left">
@@ -7,12 +7,14 @@
       </div>
       
       <div class="header-center">
-        <div class="view-switcher">
+        <div class="view-switcher" role="group" :aria-label="$t('a11y.layoutSwitcher')">
           <button 
             v-for="mode in ['graph', 'split', 'workbench']" 
             :key="mode"
+            type="button"
             class="switch-btn"
             :class="{ active: viewMode === mode }"
+            :aria-pressed="viewMode === mode"
             @click="viewMode = mode"
           >
             {{ { graph: $t('main.layoutGraph'), split: $t('main.layoutSplit'), workbench: $t('main.layoutWorkbench') }[mode] }}
@@ -143,10 +145,10 @@ const statusClass = computed(() => {
 
 const statusText = computed(() => {
   if (error.value) return t('step1.buildFailed')
-  if (currentPhase.value >= 2) return 'Ready'
-  if (currentPhase.value === 1) return 'Building Graph'
-  if (currentPhase.value === 0) return 'Generating Ontology'
-  return 'Initializing'
+  if (currentPhase.value >= 2) return t('main.statusReady')
+  if (currentPhase.value === 1) return t('main.statusBuildingGraph')
+  if (currentPhase.value === 0) return t('main.statusGeneratingOntology')
+  return t('main.statusInitializing')
 })
 
 // --- Helpers ---
@@ -554,21 +556,21 @@ onUnmounted(() => {
   height: 100vh;
   display: flex;
   flex-direction: column;
-  background: #FFF;
+  background: var(--mf-white);
   overflow: hidden;
-  font-family: 'Space Grotesk', 'Noto Sans SC', system-ui, sans-serif;
+  font-family: var(--mf-font-sans);
 }
 
 /* Header */
 .app-header {
   height: 60px;
-  border-bottom: 1px solid #EAEAEA;
+  border-bottom: 1px solid var(--mf-border);
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 0 24px;
-  background: #FFF;
-  z-index: 100;
+  background: var(--mf-white);
+  z-index: var(--mf-z-header);
   position: relative;
 }
 
@@ -579,7 +581,7 @@ onUnmounted(() => {
 }
 
 .brand {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--mf-font-mono);
   font-weight: 800;
   font-size: 18px;
   letter-spacing: 1px;
@@ -588,7 +590,7 @@ onUnmounted(() => {
 
 .view-switcher {
   display: flex;
-  background: #F5F5F5;
+  background: var(--mf-gray-100);
   padding: 4px;
   border-radius: 6px;
   gap: 4px;
@@ -600,15 +602,15 @@ onUnmounted(() => {
   padding: 6px 16px;
   font-size: 12px;
   font-weight: 600;
-  color: #666;
+  color: var(--mf-gray-500);
   border-radius: 4px;
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .switch-btn.active {
-  background: #FFF;
-  color: #000;
+  background: var(--mf-white);
+  color: var(--mf-black);
   box-shadow: 0 2px 4px rgba(0,0,0,0.05);
 }
 
@@ -617,7 +619,7 @@ onUnmounted(() => {
   align-items: center;
   gap: 8px;
   font-size: 12px;
-  color: #666;
+  color: var(--mf-gray-500);
   font-weight: 500;
 }
 
@@ -635,32 +637,32 @@ onUnmounted(() => {
 }
 
 .step-num {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--mf-font-mono);
   font-weight: 700;
-  color: #999;
+  color: var(--mf-gray-400);
 }
 
 .step-name {
   font-weight: 700;
-  color: #000;
+  color: var(--mf-black);
 }
 
 .step-divider {
   width: 1px;
   height: 14px;
-  background-color: #E0E0E0;
+  background-color: var(--mf-gray-300);
 }
 
 .dot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #CCC;
+  background: var(--mf-gray-300);
 }
 
-.status-indicator.processing .dot { background: #FF5722; animation: pulse 1s infinite; }
-.status-indicator.completed .dot { background: #4CAF50; }
-.status-indicator.error .dot { background: #F44336; }
+.status-indicator.processing .dot { background: var(--mf-warning); animation: pulse 1s infinite; }
+.status-indicator.completed .dot { background: var(--mf-success); }
+.status-indicator.error .dot { background: var(--mf-error); }
 
 @keyframes pulse { 50% { opacity: 0.5; } }
 
@@ -680,6 +682,6 @@ onUnmounted(() => {
 }
 
 .panel-wrapper.left {
-  border-right: 1px solid #EAEAEA;
+  border-right: 1px solid var(--mf-border);
 }
 </style>

@@ -32,6 +32,13 @@
   "nav": {
     "visitGithub": "Visit our Github page"
   },
+  "a11y": {
+    "languageSwitcher": "Change language",
+    "scrollDown": "Scroll to upload section",
+    "removeFile": "Remove {name}",
+    "uploadFiles": "Upload files (PDF, Markdown, or text)",
+    "layoutSwitcher": "Panel layout"
+  },
   "home": {
     "tagline": "Concise & Universal Swarm Intelligence Engine",
     "version": "/ v0.1-Preview",
@@ -75,7 +82,11 @@
     "layoutGraph": "Graph",
     "layoutSplit": "Split",
     "layoutWorkbench": "Workbench",
-    "stepNames": ["Graph Build", "Env Setup", "Run Simulation", "Report Generation", "Deep Interaction"]
+    "stepNames": ["Graph Build", "Env Setup", "Run Simulation", "Report Generation", "Deep Interaction"],
+    "statusReady": "Ready",
+    "statusBuildingGraph": "Building Graph",
+    "statusGeneratingOntology": "Generating Ontology",
+    "statusInitializing": "Initializing"
   },
   "step1": {
     "ontologyGeneration": "Ontology Generation",

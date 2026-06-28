@@ -1858,7 +1858,6 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
   z-index: 1000;
-  backdrop-filter: blur(4px);
 }
 
 .profile-modal {
@@ -2196,7 +2195,7 @@ onUnmounted(() => {
 
 .special-icon {
   filter: drop-shadow(0 2px 4px rgba(255, 87, 34, 0.2));
-  transition: transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition: transform 0.6s var(--mf-ease-out);
 }
 
 .narrative-box:hover .special-icon {
@@ -2627,7 +2626,7 @@ onUnmounted(() => {
 }
 
 .modal-enter-active .profile-modal {
-  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition: all 0.3s var(--mf-ease-out);
 }
 
 .modal-leave-active .profile-modal {

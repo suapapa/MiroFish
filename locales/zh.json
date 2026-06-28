@@ -32,6 +32,13 @@
   "nav": {
     "visitGithub": "访问我们的Github主页"
   },
+  "a11y": {
+    "languageSwitcher": "更改语言",
+    "scrollDown": "滚动到上传区域",
+    "removeFile": "移除 {name}",
+    "uploadFiles": "上传文件（PDF、Markdown 或文本）",
+    "layoutSwitcher": "面板布局"
+  },
   "home": {
     "tagline": "简洁通用的群体智能引擎",
     "version": "/ v0.1-预览版",
@@ -75,7 +82,11 @@
     "layoutGraph": "图谱",
     "layoutSplit": "双栏",
     "layoutWorkbench": "工作台",
-    "stepNames": ["图谱构建", "环境搭建", "开始模拟", "报告生成", "深度互动"]
+    "stepNames": ["图谱构建", "环境搭建", "开始模拟", "报告生成", "深度互动"],
+    "statusReady": "就绪",
+    "statusBuildingGraph": "图谱构建中",
+    "statusGeneratingOntology": "本体生成中",
+    "statusInitializing": "初始化中"
   },
   "step1": {
     "ontologyGeneration": "本体生成",

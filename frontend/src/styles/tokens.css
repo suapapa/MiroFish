@@ -1,0 +1,51 @@
+:root {
+  /* Brand */
+  --mf-black: #000000;
+  --mf-white: #ffffff;
+  --mf-orange: #ff4500;
+  --mf-orange-hover: #e63e00;
+
+  /* Neutrals (WCAG AA on white for body-muted) */
+  --mf-gray-50: #fafafa;
+  --mf-gray-100: #f5f5f5;
+  --mf-gray-200: #e5e5e5;
+  --mf-gray-300: #d4d4d4;
+  --mf-gray-400: #767676;
+  --mf-gray-500: #666666;
+  --mf-gray-600: #525252;
+  --mf-border: #e5e5e5;
+  --mf-border-strong: #cccccc;
+
+  /* Semantic */
+  --mf-success: #1a936f;
+  --mf-error: #c5283d;
+  --mf-warning: #ff5722;
+  --mf-info: #004e89;
+
+  /* Typography */
+  --mf-font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  --mf-font-sans: 'Space Grotesk', 'Noto Sans SC', system-ui, sans-serif;
+  --mf-font-cn: 'Noto Sans SC', system-ui, sans-serif;
+
+  /* Layout */
+  --mf-header-height: 60px;
+  --mf-content-max: 1400px;
+  --mf-touch-min: 44px;
+
+  /* Z-index scale */
+  --mf-z-dropdown: 100;
+  --mf-z-sticky: 200;
+  --mf-z-header: 300;
+  --mf-z-overlay: 400;
+  --mf-z-modal: 500;
+  --mf-z-toast: 600;
+
+  /* Motion */
+  --mf-ease-out: cubic-bezier(0.25, 0.8, 0.25, 1);
+  --mf-duration-fast: 150ms;
+  --mf-duration-normal: 250ms;
+
+  /* Focus */
+  --mf-focus-ring: 2px solid var(--mf-orange);
+  --mf-focus-offset: 2px;
+}

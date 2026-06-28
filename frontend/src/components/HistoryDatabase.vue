@@ -1056,8 +1056,8 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 9999;
-  backdrop-filter: blur(4px);
+  z-index: var(--mf-z-modal);
+  background: rgba(0, 0, 0, 0.5);
 }
 
 .modal-content {
@@ -1083,7 +1083,7 @@ onUnmounted(() => {
 }
 
 .modal-enter-active .modal-content {
-  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition: all 0.3s var(--mf-ease-out);
 }
 
 .modal-leave-active .modal-content {

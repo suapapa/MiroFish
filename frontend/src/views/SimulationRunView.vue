@@ -1,5 +1,5 @@
 <template>
-  <div class="main-view">
+  <div class="main-view" :class="`view-mode-${viewMode}`">
     <!-- Header -->
     <header class="app-header">
       <div class="header-left">
@@ -7,12 +7,14 @@
       </div>
       
       <div class="header-center">
-        <div class="view-switcher">
+        <div class="view-switcher" role="group" :aria-label="$t('a11y.layoutSwitcher')">
           <button 
             v-for="mode in ['graph', 'split', 'workbench']" 
             :key="mode"
+            type="button"
             class="switch-btn"
             :class="{ active: viewMode === mode }"
+            :aria-pressed="viewMode === mode"
             @click="viewMode = mode"
           >
             {{ { graph: $t('main.layoutGraph'), split: $t('main.layoutSplit'), workbench: $t('main.layoutWorkbench') }[mode] }}
@@ -120,9 +122,9 @@ const statusClass = computed(() => {
 })
 
 const statusText = computed(() => {
-  if (currentStatus.value === 'error') return 'Error'
-  if (currentStatus.value === 'completed') return 'Completed'
-  return 'Running'
+  if (currentStatus.value === 'error') return t('common.error')
+  if (currentStatus.value === 'completed') return t('common.completed')
+  return t('common.running')
 })
 
 const isSimulating = computed(() => currentStatus.value === 'processing')

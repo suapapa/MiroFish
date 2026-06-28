@@ -1,0 +1,90 @@
+/* Shared workbench shell (.main-view) — used across Process workflow views */
+
+.main-view .app-header {
+  z-index: var(--mf-z-header);
+}
+
+.main-view .switch-btn {
+  min-height: var(--mf-touch-min);
+  min-width: var(--mf-touch-min);
+  padding: 8px 16px;
+}
+
+@media (max-width: 1024px) {
+  .main-view .content-area {
+    flex-direction: column;
+  }
+
+  .main-view .panel-wrapper {
+    width: 100% !important;
+    opacity: 1 !important;
+    transform: none !important;
+    height: 50%;
+    min-height: 280px;
+  }
+
+  .main-view .panel-wrapper.left {
+    border-right: none;
+    border-bottom: 1px solid var(--mf-border);
+  }
+
+  .main-view.view-mode-graph .panel-wrapper.right,
+  .main-view.view-mode-workbench .panel-wrapper.left {
+    display: none;
+  }
+
+  .main-view.view-mode-graph .panel-wrapper.left,
+  .main-view.view-mode-workbench .panel-wrapper.right {
+    height: 100%;
+    min-height: 0;
+  }
+}
+
+@media (max-width: 768px) {
+  .main-view .app-header {
+    flex-wrap: wrap;
+    height: auto;
+    min-height: var(--mf-header-height);
+    padding: 8px 12px;
+    gap: 8px;
+  }
+
+  .main-view .header-center {
+    position: static;
+    transform: none;
+    order: 3;
+    width: 100%;
+    display: flex;
+    justify-content: center;
+  }
+
+  .main-view .header-left {
+    flex: 1;
+  }
+
+  .main-view .header-right {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+
+  .main-view .workflow-step .step-name {
+    display: none;
+  }
+
+  .main-view .view-switcher {
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  .main-view .switch-btn {
+    flex: 1;
+    font-size: 11px;
+    padding: 8px 6px;
+  }
+
+  .main-view .panel-wrapper {
+    height: 45vh;
+    min-height: 240px;
+  }
+}

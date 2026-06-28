@@ -434,7 +434,6 @@ watch(() => props.systemLogs.length, () => {
     right: 20px;
     bottom: 20px;
     background: rgba(255, 255, 255, 0.98);
-    backdrop-filter: blur(4px);
     z-index: 10;
     border: 1px solid #EAEAEA;
     box-shadow: 0 4px 20px rgba(0,0,0,0.05);

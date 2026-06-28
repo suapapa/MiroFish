@@ -4,7 +4,7 @@
     <nav class="navbar">
       <div class="nav-brand">MIROFISH</div>
       <div class="nav-links">
-        <LanguageSwitcher />
+        <LanguageSwitcher variant="dark" />
         <a href="https://github.com/666ghj/MiroFish" target="_blank" class="github-link">
           {{ $t('nav.visitGithub') }} <span class="arrow">↗</span>
         </a>
@@ -22,7 +22,7 @@
           
           <h1 class="main-title">
             {{ $t('home.heroTitle1') }}<br>
-            <span class="gradient-text">{{ $t('home.heroTitle2') }}</span>
+            <span class="hero-accent">{{ $t('home.heroTitle2') }}</span>
           </h1>
           
           <div class="hero-desc">
@@ -47,8 +47,13 @@
             <img src="../assets/logo/MiroFish_logo_left.jpeg" alt="MiroFish Logo" class="hero-logo" />
           </div>
           
-          <button class="scroll-down-btn" @click="scrollToBottom">
-            ↓
+          <button
+            type="button"
+            class="scroll-down-btn"
+            :aria-label="$t('a11y.scrollDown')"
+            @click="scrollToBottom"
+          >
+            <span aria-hidden="true">↓</span>
           </button>
         </div>
       </section>
@@ -65,20 +70,8 @@
           <p class="section-desc">
             {{ $t('home.systemReadyDesc') }}
           </p>
-          
-          <!-- Metric cards -->
-          <div class="metrics-row">
-            <div class="metric-card">
-              <div class="metric-value">{{ $t('home.metricLowCost') }}</div>
-              <div class="metric-label">{{ $t('home.metricLowCostDesc') }}</div>
-            </div>
-            <div class="metric-card">
-              <div class="metric-value">{{ $t('home.metricHighAvail') }}</div>
-              <div class="metric-label">{{ $t('home.metricHighAvailDesc') }}</div>
-            </div>
-          </div>
 
-          <!-- Project simulation workflow intro (new section) -->
+          <!-- Project simulation workflow intro -->
           <div class="steps-container">
             <div class="steps-header">
                <span class="diamond-icon">◇</span> {{ $t('home.workflowSequence') }}
@@ -133,22 +126,22 @@
                 <span class="console-meta">{{ $t('home.supportedFormats') }}</span>
               </div>
               
-              <div 
+              <label
                 class="upload-zone"
                 :class="{ 'drag-over': isDragOver, 'has-files': files.length > 0 }"
                 @dragover.prevent="handleDragOver"
                 @dragleave.prevent="handleDragLeave"
                 @drop.prevent="handleDrop"
-                @click="triggerFileInput"
               >
                 <input
-                  ref="fileInput"
+                  id="file-input"
                   type="file"
                   multiple
                   accept=".pdf,.md,.txt"
+                  class="file-input-hidden"
                   @change="handleFileSelect"
-                  style="display: none"
                   :disabled="loading"
+                  :aria-label="$t('a11y.uploadFiles')"
                 />
                 
                 <div v-if="files.length === 0" class="upload-placeholder">
@@ -161,10 +154,15 @@
                   <div v-for="(file, index) in files" :key="index" class="file-item">
                     <span class="file-icon">📄</span>
                     <span class="file-name">{{ file.name }}</span>
-                    <button @click.stop="removeFile(index)" class="remove-btn">×</button>
+                    <button
+                      type="button"
+                      @click.stop="removeFile(index)"
+                      class="remove-btn"
+                      :aria-label="$t('a11y.removeFile', { name: file.name })"
+                    >×</button>
                   </div>
                 </div>
-              </div>
+              </label>
             </div>
 
             <!-- Divider -->
@@ -178,7 +176,9 @@
                 <span class="console-label">{{ $t('home.simulationPrompt') }}</span>
               </div>
               <div class="input-wrapper">
+                <label for="simulation-prompt" class="sr-only">{{ $t('home.simulationPrompt') }}</label>
                 <textarea
+                  id="simulation-prompt"
                   v-model="formData.simulationRequirement"
                   class="code-input"
                   :placeholder="$t('home.promptPlaceholder')"
@@ -192,6 +192,7 @@
             <!-- Start button -->
             <div class="console-section btn-section">
               <button 
+                type="button"
                 class="start-engine-btn"
                 @click="startSimulation"
                 :disabled="!canSubmit || loading"
@@ -232,20 +233,10 @@ const loading = ref(false)
 const error = ref('')
 const isDragOver = ref(false)
 
-// File input ref
-const fileInput = ref(null)
-
 // Computed: whether form can be submitted
 const canSubmit = computed(() => {
   return formData.value.simulationRequirement.trim() !== '' && files.value.length > 0
 })
-
-// Trigger file selection
-const triggerFileInput = () => {
-  if (!loading.value) {
-    fileInput.value?.click()
-  }
-}
 
 // Handle file selection
 const handleFileSelect = (event) => {
@@ -312,35 +303,18 @@ const startSimulation = () => {
 </script>
 
 <style scoped>
-/* Global variables and reset */
-:root {
-  --black: #000000;
-  --white: #FFFFFF;
-  --orange: #FF4500;
-  --gray-light: #F5F5F5;
-  --gray-text: #666666;
-  --border: #E5E5E5;
-  /* 
-    Use Space Grotesk for headings and JetBrains Mono for code/labels.
-    Ensure these Google Fonts are loaded in index.html.
-  */
-  --font-mono: 'JetBrains Mono', monospace;
-  --font-sans: 'Space Grotesk', 'Noto Sans SC', system-ui, sans-serif;
-  --font-cn: 'Noto Sans SC', system-ui, sans-serif;
-}
-
 .home-container {
   min-height: 100vh;
-  background: var(--white);
-  font-family: var(--font-sans);
-  color: var(--black);
+  background: var(--mf-white);
+  font-family: var(--mf-font-sans);
+  color: var(--mf-black);
 }
 
 /* Top navigation */
 .navbar {
   height: 60px;
-  background: var(--black);
-  color: var(--white);
+  background: var(--mf-black);
+  color: var(--mf-white);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -348,7 +322,7 @@ const startSimulation = () => {
 }
 
 .nav-brand {
-  font-family: var(--font-mono);
+  font-family: var(--mf-font-mono);
   font-weight: 800;
   letter-spacing: 1px;
   font-size: 1.2rem;
@@ -361,9 +335,9 @@ const startSimulation = () => {
 }
 
 .github-link {
-  color: var(--white);
+  color: var(--mf-white);
   text-decoration: none;
-  font-family: var(--font-mono);
+  font-family: var(--mf-font-mono);
   font-size: 0.9rem;
   font-weight: 500;
   display: flex;
@@ -405,13 +379,13 @@ const startSimulation = () => {
   align-items: center;
   gap: 15px;
   margin-bottom: 25px;
-  font-family: var(--font-mono);
+  font-family: var(--mf-font-mono);
   font-size: 0.8rem;
 }
 
 .orange-tag {
-  background: var(--orange);
-  color: var(--white);
+  background: var(--mf-orange);
+  color: var(--mf-white);
   padding: 4px 10px;
   font-weight: 700;
   letter-spacing: 1px;
@@ -419,31 +393,30 @@ const startSimulation = () => {
 }
 
 .version-text {
-  color: #999;
+  color: var(--mf-gray-400);
   font-weight: 500;
   letter-spacing: 0.5px;
 }
 
 .main-title {
-  font-size: 4.5rem;
+  font-size: clamp(2rem, 6vw, 4.5rem);
   line-height: 1.2;
   font-weight: 500;
   margin: 0 0 40px 0;
-  letter-spacing: -2px;
-  color: var(--black);
+  letter-spacing: -0.04em;
+  color: var(--mf-black);
+  text-wrap: balance;
 }
 
-.gradient-text {
-  background: linear-gradient(90deg, #000000 0%, #444444 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  display: inline-block;
+.hero-accent {
+  color: var(--mf-gray-600);
+  font-weight: 600;
 }
 
 .hero-desc {
   font-size: 1.05rem;
   line-height: 1.8;
-  color: var(--gray-text);
+  color: var(--mf-gray-500);
   max-width: 640px;
   margin-bottom: 50px;
   font-weight: 400;
@@ -455,38 +428,37 @@ const startSimulation = () => {
 }
 
 .highlight-bold {
-  color: var(--black);
+  color: var(--mf-black);
   font-weight: 700;
 }
 
 .highlight-orange {
-  color: var(--orange);
+  color: var(--mf-orange);
   font-weight: 700;
-  font-family: var(--font-mono);
+  font-family: var(--mf-font-mono);
 }
 
 .highlight-code {
   background: rgba(0, 0, 0, 0.05);
   padding: 2px 6px;
   border-radius: 2px;
-  font-family: var(--font-mono);
+  font-family: var(--mf-font-mono);
   font-size: 0.9em;
-  color: var(--black);
+  color: var(--mf-black);
   font-weight: 600;
 }
 
 .slogan-text {
   font-size: 1.2rem;
   font-weight: 520;
-  color: var(--black);
+  color: var(--mf-black);
   letter-spacing: 1px;
-  border-left: 3px solid var(--orange);
-  padding-left: 15px;
+  padding-top: 4px;
   margin-top: 20px;
 }
 
 .blinking-cursor {
-  color: var(--orange);
+  color: var(--mf-orange);
   animation: blink 1s step-end infinite;
   font-weight: 700;
 }
@@ -499,7 +471,7 @@ const startSimulation = () => {
 .decoration-square {
   width: 16px;
   height: 16px;
-  background: var(--orange);
+  background: var(--mf-orange);
 }
 
 .hero-right {
@@ -523,28 +495,28 @@ const startSimulation = () => {
 }
 
 .scroll-down-btn {
-  width: 40px;
-  height: 40px;
-  border: 1px solid var(--border);
+  width: var(--mf-touch-min);
+  height: var(--mf-touch-min);
+  border: 1px solid var(--mf-border);
   background: transparent;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  color: var(--orange);
+  color: var(--mf-orange);
   font-size: 1.2rem;
   transition: all 0.2s;
 }
 
 .scroll-down-btn:hover {
-  border-color: var(--orange);
+  border-color: var(--mf-orange);
 }
 
 /* Dashboard two-column layout */
 .dashboard-section {
   display: flex;
   gap: 60px;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--mf-border);
   padding-top: 60px;
   align-items: flex-start;
 }
@@ -561,9 +533,9 @@ const startSimulation = () => {
 }
 
 .panel-header {
-  font-family: var(--font-mono);
+  font-family: var(--mf-font-mono);
   font-size: 0.8rem;
-  color: #999;
+  color: var(--mf-gray-400);
   display: flex;
   align-items: center;
   gap: 8px;
@@ -571,7 +543,7 @@ const startSimulation = () => {
 }
 
 .status-dot {
-  color: var(--orange);
+  color: var(--mf-orange);
   font-size: 0.8rem;
 }
 
@@ -582,25 +554,23 @@ const startSimulation = () => {
 }
 
 .section-desc {
-  color: var(--gray-text);
+  color: var(--mf-gray-500);
   margin-bottom: 25px;
   line-height: 1.6;
 }
 
 .metrics-row {
-  display: flex;
-  gap: 20px;
-  margin-bottom: 15px;
+  display: none;
 }
 
 .metric-card {
-  border: 1px solid var(--border);
+  border: 1px solid var(--mf-border);
   padding: 20px 30px;
   min-width: 150px;
 }
 
 .metric-value {
-  font-family: var(--font-mono);
+  font-family: var(--mf-font-mono);
   font-size: 1.8rem;
   font-weight: 520;
   margin-bottom: 5px;
@@ -608,20 +578,20 @@ const startSimulation = () => {
 
 .metric-label {
   font-size: 0.85rem;
-  color: #999;
+  color: var(--mf-gray-400);
 }
 
 /* Project simulation workflow intro */
 .steps-container {
-  border: 1px solid var(--border);
+  border: 1px solid var(--mf-border);
   padding: 30px;
   position: relative;
 }
 
 .steps-header {
-  font-family: var(--font-mono);
+  font-family: var(--mf-font-mono);
   font-size: 0.8rem;
-  color: #999;
+  color: var(--mf-gray-400);
   margin-bottom: 25px;
   display: flex;
   align-items: center;
@@ -646,9 +616,9 @@ const startSimulation = () => {
 }
 
 .step-num {
-  font-family: var(--font-mono);
+  font-family: var(--mf-font-mono);
   font-weight: 700;
-  color: var(--black);
+  color: var(--mf-black);
   opacity: 0.3;
 }
 
@@ -664,7 +634,7 @@ const startSimulation = () => {
 
 .step-desc {
   font-size: 0.85rem;
-  color: var(--gray-text);
+  color: var(--mf-gray-500);
 }
 
 /* Right interaction console */
@@ -689,12 +659,26 @@ const startSimulation = () => {
   display: flex;
   justify-content: space-between;
   margin-bottom: 15px;
-  font-family: var(--font-mono);
+  font-family: var(--mf-font-mono);
   font-size: 0.75rem;
   color: #666;
 }
 
+.file-input-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .upload-zone {
+  position: relative;
+  display: block;
   border: 1px dashed #CCC;
   height: 200px;
   overflow-y: auto;
@@ -727,7 +711,7 @@ const startSimulation = () => {
   align-items: center;
   justify-content: center;
   margin: 0 auto 15px;
-  color: #999;
+  color: var(--mf-gray-400);
 }
 
 .upload-title {
@@ -737,9 +721,9 @@ const startSimulation = () => {
 }
 
 .upload-hint {
-  font-family: var(--font-mono);
+  font-family: var(--mf-font-mono);
   font-size: 0.75rem;
-  color: #999;
+  color: var(--mf-gray-400);
 }
 
 .file-list {
@@ -753,10 +737,10 @@ const startSimulation = () => {
 .file-item {
   display: flex;
   align-items: center;
-  background: var(--white);
+  background: var(--mf-white);
   padding: 8px 12px;
   border: 1px solid #EEE;
-  font-family: var(--font-mono);
+  font-family: var(--mf-font-mono);
   font-size: 0.85rem;
 }
 
@@ -770,7 +754,12 @@ const startSimulation = () => {
   border: none;
   cursor: pointer;
   font-size: 1.2rem;
-  color: #999;
+  color: var(--mf-gray-400);
+  min-width: var(--mf-touch-min);
+  min-height: var(--mf-touch-min);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .console-divider {
@@ -789,9 +778,9 @@ const startSimulation = () => {
 
 .console-divider span {
   padding: 0 15px;
-  font-family: var(--font-mono);
+  font-family: var(--mf-font-mono);
   font-size: 0.7rem;
-  color: #BBB;
+  color: var(--mf-gray-400);
   letter-spacing: 1px;
 }
 
@@ -806,11 +795,10 @@ const startSimulation = () => {
   border: none;
   background: transparent;
   padding: 20px;
-  font-family: var(--font-mono);
+  font-family: var(--mf-font-mono);
   font-size: 0.9rem;
   line-height: 1.6;
   resize: vertical;
-  outline: none;
   min-height: 150px;
 }
 
@@ -818,18 +806,18 @@ const startSimulation = () => {
   position: absolute;
   bottom: 10px;
   right: 15px;
-  font-family: var(--font-mono);
+  font-family: var(--mf-font-mono);
   font-size: 0.7rem;
-  color: #AAA;
+  color: var(--mf-gray-400);
 }
 
 .start-engine-btn {
   width: 100%;
-  background: var(--black);
-  color: var(--white);
+  background: var(--mf-black);
+  color: var(--mf-white);
   border: none;
   padding: 20px;
-  font-family: var(--font-mono);
+  font-family: var(--mf-font-mono);
   font-weight: 700;
   font-size: 1.1rem;
   display: flex;
@@ -844,14 +832,14 @@ const startSimulation = () => {
 
 /* Clickable state (not disabled) */
 .start-engine-btn:not(:disabled) {
-  background: var(--black);
-  border: 1px solid var(--black);
+  background: var(--mf-black);
+  border: 1px solid var(--mf-black);
   animation: pulse-border 2s infinite;
 }
 
 .start-engine-btn:hover:not(:disabled) {
-  background: var(--orange);
-  border-color: var(--orange);
+  background: var(--mf-orange);
+  border-color: var(--mf-orange);
   transform: translateY(-2px);
 }
 
@@ -861,7 +849,7 @@ const startSimulation = () => {
 
 .start-engine-btn:disabled {
   background: #E5E5E5;
-  color: #999;
+  color: var(--mf-gray-400);
   cursor: not-allowed;
   transform: none;
   border: 1px solid #E5E5E5;
@@ -872,6 +860,20 @@ const startSimulation = () => {
   0% { box-shadow: 0 0 0 0 rgba(0, 0, 0, 0.2); }
   70% { box-shadow: 0 0 0 6px rgba(0, 0, 0, 0); }
   100% { box-shadow: 0 0 0 0 rgba(0, 0, 0, 0); }
+}
+
+@media (max-width: 768px) {
+  .navbar {
+    padding: 0 16px;
+  }
+
+  .main-content {
+    padding: 40px 16px;
+  }
+
+  .main-title {
+    font-size: clamp(1.75rem, 8vw, 2.5rem);
+  }
 }
 
 /* Responsive */

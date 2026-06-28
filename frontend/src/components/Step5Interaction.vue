@@ -2116,7 +2116,6 @@ watch(() => props.simulationId, (newId) => {
 }
 
 .chat-input:focus {
-  outline: none;
   border-color: #1F2937;
 }
 
@@ -2348,7 +2347,6 @@ watch(() => props.simulationId, (newId) => {
 }
 
 .survey-input:focus {
-  outline: none;
   border-color: #1F2937;
 }
 
