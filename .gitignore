@@ -58,3 +58,7 @@ backend/uploads/
 
 # Docker 持久化数据（compose bind mounts）
 mirofish-data/
+.agents/
+skills-lock.json
+.github/skills/
+_example_docs/

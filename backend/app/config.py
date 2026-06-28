@@ -79,8 +79,8 @@ class Config:
     ALLOWED_EXTENSIONS = {'pdf', 'md', 'txt', 'markdown'}
     
     # Text processing settings
-    DEFAULT_CHUNK_SIZE = 500  # default chunk size
-    DEFAULT_CHUNK_OVERLAP = 50  # default overlap
+    DEFAULT_CHUNK_SIZE = int(os.environ.get('CHUNK_SIZE', '500'))
+    DEFAULT_CHUNK_OVERLAP = int(os.environ.get('CHUNK_OVERLAP', '50'))
     # Graph build: text chunks per Graphiti batch (episodes still processed sequentially)
     DEFAULT_GRAPH_BUILD_BATCH_SIZE = int(os.environ.get('GRAPH_BUILD_BATCH_SIZE', '1'))
     

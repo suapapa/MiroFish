@@ -249,8 +249,8 @@ def build_graph():
         {
             "project_id": "proj_xxxx",  // required, from API 1
             "graph_name": "Graph name", // optional
-            "chunk_size": 500,          // optional, default 500
-            "chunk_overlap": 50         // optional, default 50
+            "chunk_size": 500,          // optional, default from CHUNK_SIZE env (500)
+            "chunk_overlap": 50         // optional, default from CHUNK_OVERLAP env (50)
         }
 
     Response:
