@@ -296,7 +296,6 @@ import {
   getRunStatusDetail
 } from '../api/simulation'
 import { generateReport } from '../api/report'
-import { createSSE } from '../api/sse'
 
 const { t } = useI18n()
 
@@ -463,48 +462,26 @@ const handleStopSimulation = async () => {
   }
 }
 
-// SSE connections
-let statusSSE = null
-let detailSSE = null
+// Poll status
+let statusTimer = null
+let detailTimer = null
 
 const startStatusPolling = () => {
-  if (statusSSE) return
-  statusSSE = createSSE(`/api/simulation/${props.simulationId}/run-status/stream`, {
-    onUpdate: (data) => {
-      handleRunStatusUpdate(data)
-    },
-    onComplete: (data) => {
-      handleRunStatusUpdate(data)
-    },
-    onError: (err) => {
-      console.warn('Run status SSE stream error:', err)
-    }
-  })
+  statusTimer = setInterval(fetchRunStatus, 2000)
 }
 
 const startDetailPolling = () => {
-  if (detailSSE) return
-  detailSSE = createSSE(`/api/simulation/${props.simulationId}/run-status/detail/stream`, {
-    onUpdate: (data) => {
-      handleRunStatusDetailUpdate(data)
-    },
-    onComplete: (data) => {
-      handleRunStatusDetailUpdate(data)
-    },
-    onError: (err) => {
-      console.warn('Run status detail SSE stream error:', err)
-    }
-  })
+  detailTimer = setInterval(fetchRunStatusDetail, 3000)
 }
 
 const stopPolling = () => {
-  if (statusSSE) {
-    statusSSE.close()
-    statusSSE = null
+  if (statusTimer) {
+    clearInterval(statusTimer)
+    statusTimer = null
   }
-  if (detailSSE) {
-    detailSSE.close()
-    detailSSE = null
+  if (detailTimer) {
+    clearInterval(detailTimer)
+    detailTimer = null
   }
 }
 
@@ -512,35 +489,47 @@ const stopPolling = () => {
 const prevTwitterRound = ref(0)
 const prevRedditRound = ref(0)
 
-const handleRunStatusUpdate = (data) => {
-  runStatus.value = data
+const fetchRunStatus = async () => {
+  if (!props.simulationId) return
   
-  // Detect round changes per platform and log
-  if (data.twitter_current_round > prevTwitterRound.value) {
-    addLog(`[Plaza] R${data.twitter_current_round}/${data.total_rounds} | T:${data.twitter_simulated_hours || 0}h | A:${data.twitter_actions_count}`)
-    prevTwitterRound.value = data.twitter_current_round
-  }
-  
-  if (data.reddit_current_round > prevRedditRound.value) {
-    addLog(`[Community] R${data.reddit_current_round}/${data.total_rounds} | T:${data.reddit_simulated_hours || 0}h | A:${data.reddit_actions_count}`)
-    prevRedditRound.value = data.reddit_current_round
-  }
-  
-  // Detect simulation completion via runner_status or platform completion
-  const isCompleted = data.runner_status === 'completed' || data.runner_status === 'stopped'
-  
-  // Extra check: platforms may report done before runner_status updates
-  // Infer completion from twitter_completed and reddit_completed
-  const platformsCompleted = checkPlatformsCompleted(data)
-  
-  if (isCompleted || platformsCompleted) {
-    if (platformsCompleted && !isCompleted) {
-      addLog(t('log.allPlatformsCompleted'))
+  try {
+    const res = await getRunStatus(props.simulationId)
+    
+    if (res.success && res.data) {
+      const data = res.data
+      
+      runStatus.value = data
+      
+      // Detect round changes per platform and log
+      if (data.twitter_current_round > prevTwitterRound.value) {
+        addLog(`[Plaza] R${data.twitter_current_round}/${data.total_rounds} | T:${data.twitter_simulated_hours || 0}h | A:${data.twitter_actions_count}`)
+        prevTwitterRound.value = data.twitter_current_round
+      }
+      
+      if (data.reddit_current_round > prevRedditRound.value) {
+        addLog(`[Community] R${data.reddit_current_round}/${data.total_rounds} | T:${data.reddit_simulated_hours || 0}h | A:${data.reddit_actions_count}`)
+        prevRedditRound.value = data.reddit_current_round
+      }
+      
+      // Detect simulation completion via runner_status or platform completion
+      const isCompleted = data.runner_status === 'completed' || data.runner_status === 'stopped'
+      
+      // Extra check: platforms may report done before runner_status updates
+      // Infer completion from twitter_completed and reddit_completed
+      const platformsCompleted = checkPlatformsCompleted(data)
+      
+      if (isCompleted || platformsCompleted) {
+        if (platformsCompleted && !isCompleted) {
+          addLog(t('log.allPlatformsCompleted'))
+        }
+        addLog(t('log.simCompleted'))
+        phase.value = 2
+        stopPolling()
+        emit('update-status', 'completed')
+      }
     }
-    addLog(t('log.simCompleted'))
-    phase.value = 2
-    stopPolling()
-    emit('update-status', 'completed')
+  } catch (err) {
+    console.warn('获取运行状态失败:', err)
   }
 }
 
@@ -568,25 +557,38 @@ const checkPlatformsCompleted = (data) => {
   return true
 }
 
-const handleRunStatusDetailUpdate = (data) => {
-  // Use all_actions for full action list
-  const serverActions = data.all_actions || []
+const fetchRunStatusDetail = async () => {
+  if (!props.simulationId) return
   
-  // Incrementally add new actions (deduped)
-  let newActionsAdded = 0
-  serverActions.forEach(action => {
-    // Generate unique ID
-    const actionId = action.id || `${action.timestamp}-${action.platform}-${action.agent_id}-${action.action_type}`
+  try {
+    const res = await getRunStatusDetail(props.simulationId)
     
-    if (!actionIds.value.has(actionId)) {
-      actionIds.value.add(actionId)
-      allActions.value.push({
-        ...action,
-        _uniqueId: actionId
+    if (res.success && res.data) {
+      // Use all_actions for full action list
+      const serverActions = res.data.all_actions || []
+      
+      // Incrementally add new actions (deduped)
+      let newActionsAdded = 0
+      serverActions.forEach(action => {
+        // Generate unique ID
+        const actionId = action.id || `${action.timestamp}-${action.platform}-${action.agent_id}-${action.action_type}`
+        
+        if (!actionIds.value.has(actionId)) {
+          actionIds.value.add(actionId)
+          allActions.value.push({
+            ...action,
+            _uniqueId: actionId
+          })
+          newActionsAdded++
+        }
       })
-      newActionsAdded++
+      
+      // Do not auto-scroll; let user browse timeline
+      // New actions append at bottom
     }
-  })
+  } catch (err) {
+    console.warn('获取详细状态失败:', err)
+  }
 }
 
 // Helpers

@@ -516,23 +516,6 @@ def get_task(task_id: str):
     })
 
 
-@graph_bp.route('/task/<task_id>/stream', methods=['GET'])
-def stream_task(task_id: str):
-    """Stream task status updates via SSE"""
-    from ..utils.sse import sse_stream
-    
-    def fetch():
-        task = TaskManager().get_task(task_id)
-        if not task:
-            raise StopIteration
-        return task.to_dict()
-    
-    def is_done(data):
-        return data.get('status') in ('completed', 'failed')
-    
-    return sse_stream(fetch, stop_condition=is_done, interval=2)
-
-
 @graph_bp.route('/tasks', methods=['GET'])
 def list_tasks():
     """List all tasks"""
@@ -566,27 +549,6 @@ def get_graph_data(graph_id: str):
             "error": str(e),
             "traceback": traceback.format_exc()
         }), 500
-
-
-@graph_bp.route('/data/<graph_id>/stream', methods=['GET'])
-def stream_graph_data(graph_id: str):
-    """Stream graph data updates via SSE (for live build visualization)"""
-    from ..utils.sse import sse_stream
-    
-    refresh = request.args.get('refresh', 'false').lower() == 'true'
-    
-    def fetch():
-        try:
-            builder = GraphBuilderService()
-            data = builder.get_graph_data(graph_id, use_cache=not refresh)
-            if data:
-                return data
-        except Exception as e:
-            logger.warning(f"Graph data fetch for stream: {e}")
-        return None
-    
-    return sse_stream(fetch, interval=10)
-
 
 
 @graph_bp.route('/delete/<graph_id>', methods=['DELETE'])

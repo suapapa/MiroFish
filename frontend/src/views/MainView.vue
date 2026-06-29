@@ -91,7 +91,6 @@ import Step2EnvSetup from '../components/Step2EnvSetup.vue'
 import { generateOntology, getProject, buildGraph, getTaskStatus, getGraphData } from '../api/graph'
 import { getPendingUpload, clearPendingUpload } from '../store/pendingUpload'
 import LanguageSwitcher from '../components/LanguageSwitcher.vue'
-import { createSSE } from '../api/sse'
 
 const route = useRoute()
 const router = useRouter()
@@ -117,10 +116,12 @@ const buildProgress = ref(null)
 const systemLogs = ref([])
 const retryingBuild = ref(false)
 
-// Polling SSE connections
-let pollSSE = null
-let graphSSE = null
+// Polling timers
+let pollTimer = null
+let graphPollTimer = null
 let currentGraphId = null
+let isTaskStatusRequestInFlight = false
+let isGraphDataRequestInFlight = false
 
 // --- Computed Layout Styles ---
 const leftPanelStyle = computed(() => {
@@ -368,117 +369,133 @@ const startBuildGraph = async () => {
 }
 
 const startGraphPolling = () => {
-  if (graphSSE) {
-    graphSSE.close()
+  if (graphPollTimer) {
+    clearInterval(graphPollTimer)
   }
-  const graphId = currentGraphId || projectData.value?.graph_id
-  if (!graphId) return
-
-  addLog('Started streaming graph data...')
-  
-  graphSSE = createSSE(`/api/graph/data/${graphId}/stream?refresh=${currentPhase.value === 1}`, {
-    onUpdate: (data) => {
-      handleGraphDataUpdate(data)
-    },
-    onComplete: (data) => {
-      handleGraphDataUpdate(data)
-    },
-    onError: (err) => {
-      console.warn('Graph data SSE stream error:', err)
-    }
-  })
+  addLog('Started polling for graph data...')
+  void fetchGraphData()
+  graphPollTimer = setInterval(() => {
+    void fetchGraphData()
+  }, 10000)
 }
 
-const handleGraphDataUpdate = (data) => {
-  const nodeCount = data.node_count || data.nodes?.length || 0
-  const edgeCount = data.edge_count || data.edges?.length || 0
-  const prevNodeCount = graphData.value?.node_count || graphData.value?.nodes?.length || 0
-
-  // During build, skip transient empty responses to avoid clearing UI (FalkorDB/Graphiti write contention)
-  if (currentPhase.value === 1 && prevNodeCount > 0 && nodeCount === 0) {
-    addLog(`Graph refresh skipped (transient empty response while building)`)
+const fetchGraphData = async () => {
+  if (isGraphDataRequestInFlight) {
     return
   }
 
-  const prevEdgeCount = graphData.value?.edge_count || graphData.value?.edges?.length || 0
-  const shouldUpdate =
-    !graphData.value ||
-    nodeCount !== prevNodeCount ||
-    edgeCount !== prevEdgeCount
-
-  if (shouldUpdate) {
-    graphData.value = data
+  const graphId = currentGraphId || projectData.value?.graph_id
+  if (!graphId) {
+    return
   }
-  addLog(`Graph data refreshed. Nodes: ${nodeCount}, Edges: ${edgeCount}`)
+
+  isGraphDataRequestInFlight = true
+  try {
+    // During build, bypass cache to reflect latest FalkorDB nodes/edges
+    const gRes = await getGraphData(graphId, { refresh: currentPhase.value === 1 })
+    if (gRes.success) {
+      const nodeCount = gRes.data.node_count || gRes.data.nodes?.length || 0
+      const edgeCount = gRes.data.edge_count || gRes.data.edges?.length || 0
+      const prevNodeCount = graphData.value?.node_count || graphData.value?.nodes?.length || 0
+
+      // During build, skip transient empty responses to avoid clearing UI (FalkorDB/Graphiti write contention)
+      if (currentPhase.value === 1 && prevNodeCount > 0 && nodeCount === 0) {
+        addLog(`Graph refresh skipped (transient empty response while building)`)
+        return
+      }
+
+      const prevEdgeCount = graphData.value?.edge_count || graphData.value?.edges?.length || 0
+      const shouldUpdate =
+        !graphData.value ||
+        nodeCount !== prevNodeCount ||
+        edgeCount !== prevEdgeCount
+
+      if (shouldUpdate) {
+        graphData.value = gRes.data
+      }
+      addLog(`Graph data refreshed. Nodes: ${nodeCount}, Edges: ${edgeCount}`)
+    }
+  } catch (err) {
+    console.warn('Graph fetch error:', err)
+  } finally {
+    isGraphDataRequestInFlight = false
+  }
 }
 
 const startPollingTask = (taskId) => {
-  if (pollSSE) {
-    pollSSE.close()
+  if (pollTimer) {
+    clearInterval(pollTimer)
   }
-  
-  pollSSE = createSSE(`/api/graph/task/${taskId}/stream`, {
-    onUpdate: (data) => {
-      void handleTaskStatusUpdate(taskId, data)
-    },
-    onComplete: (data) => {
-      void handleTaskStatusUpdate(taskId, data)
-    },
-    onError: (err) => {
-      console.warn('Task SSE stream error:', err)
-    }
-  })
+  void pollTaskStatus(taskId)
+  pollTimer = setInterval(() => {
+    void pollTaskStatus(taskId)
+  }, 2000)
 }
 
-const handleTaskStatusUpdate = async (taskId, task) => {
-  syncGraphId(task.result?.graph_id || task.metadata?.graph_id)
-  
-  // Log progress message if it changed
-  if (task.message && task.message !== buildProgress.value?.message) {
-    addLog(task.message)
+const pollTaskStatus = async (taskId) => {
+  if (isTaskStatusRequestInFlight) {
+    return
   }
-  
-  buildProgress.value = { progress: task.progress || 0, message: task.message }
-  
-  if (task.status === 'completed') {
-    addLog('Graph build task completed.')
-    stopPolling()
-    stopGraphPolling() // Stop polling, do final load
-    error.value = ''
-    currentPhase.value = 2
-    const completedGraphId = task.result?.graph_id || currentGraphId || projectData.value?.graph_id
 
-    if (projectData.value) {
-      projectData.value = {
-        ...projectData.value,
-        status: 'graph_completed',
-        graph_id: completedGraphId || projectData.value.graph_id,
-        graph_build_task_id: taskId
+  isTaskStatusRequestInFlight = true
+  try {
+    const res = await getTaskStatus(taskId)
+    if (res.success) {
+      const task = res.data
+      syncGraphId(task.result?.graph_id || task.metadata?.graph_id)
+      
+      // Log progress message if it changed
+      if (task.message && task.message !== buildProgress.value?.message) {
+        addLog(task.message)
       }
-    }
+      
+      buildProgress.value = { progress: task.progress || 0, message: task.message }
+      
+      if (task.status === 'completed') {
+        addLog('Graph build task completed.')
+        stopPolling()
+        stopGraphPolling() // Stop polling, do final load
+        error.value = ''
+        currentPhase.value = 2
+        const completedGraphId = task.result?.graph_id || currentGraphId || projectData.value?.graph_id
 
-    if (completedGraphId) {
-      await loadGraph(completedGraphId)
-    } else {
-      const projRes = await getProject(currentProjectId.value)
-      if (projRes.success && projRes.data.graph_id) {
-        syncProjectData(projRes.data)
-        await loadGraph(projRes.data.graph_id)
+        if (projectData.value) {
+          projectData.value = {
+            ...projectData.value,
+            status: 'graph_completed',
+            graph_id: completedGraphId || projectData.value.graph_id,
+            graph_build_task_id: taskId
+          }
+        }
+
+        if (completedGraphId) {
+          await loadGraph(completedGraphId)
+        } else {
+          const projRes = await getProject(currentProjectId.value)
+          if (projRes.success && projRes.data.graph_id) {
+            syncProjectData(projRes.data)
+            await loadGraph(projRes.data.graph_id)
+          }
+        }
+      } else if (task.status === 'failed') {
+        stopPolling()
+        stopGraphPolling()
+        error.value = task.message || task.error || t('step1.buildFailedGeneric')
+        if (projectData.value) {
+          projectData.value = {
+            ...projectData.value,
+            status: 'failed',
+            error: error.value
+          }
+        }
+        buildProgress.value = null
+        addLog(`Graph build task failed: ${error.value}`)
       }
     }
-  } else if (task.status === 'failed') {
-    stopPolling()
-    stopGraphPolling()
-    error.value = task.message || task.error || t('step1.buildFailedGeneric')
-    if (projectData.value) {
-      projectData.value = {
-        ...projectData.value,
-        status: 'failed',
-        error: error.value
-      }
-    }
-    buildProgress.value = null
-    addLog(`Graph build task failed: ${error.value}`)
+  } catch (e) {
+    console.error(e)
+  } finally {
+    isTaskStatusRequestInFlight = false
   }
 }
 
@@ -510,16 +527,16 @@ const refreshGraph = () => {
 }
 
 const stopPolling = () => {
-  if (pollSSE) {
-    pollSSE.close()
-    pollSSE = null
+  if (pollTimer) {
+    clearInterval(pollTimer)
+    pollTimer = null
   }
 }
 
 const stopGraphPolling = () => {
-  if (graphSSE) {
-    graphSSE.close()
-    graphSSE = null
+  if (graphPollTimer) {
+    clearInterval(graphPollTimer)
+    graphPollTimer = null
     addLog('Graph polling stopped.')
   }
 }
