@@ -133,8 +133,8 @@ LLM_MODEL_NAME=qwen-plus
 
 # Knowledge graph: Graphiti + FalkorDB (self-hosted, replaces Zep Cloud)
 # With docker-compose, FalkorDB starts automatically and the backend is wired to it.
-# For local (non-docker) runs, start FalkorDB yourself:
-#   docker run -p 6379:6379 falkordb/falkordb
+# For local (non-docker) runs, start FalkorDB yourself (with increased query timeout):
+#   docker run -p 6379:6379 -e FALKORDB_ARGS="TIMEOUT_DEFAULT 30000 TIMEOUT_MAX 60000" falkordb/falkordb
 GRAPH_DB_HOST=localhost
 GRAPH_DB_PORT=6379
 GRAPH_DB_NAME=mirofish

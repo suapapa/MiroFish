@@ -12,6 +12,9 @@ services:
     # The backend reaches it over the internal compose network, so publishing is not required.
     ports:
       - "6379:6379"
+    environment:
+      # Increase default query timeout (1s is too short for large graphs or complex traversals)
+      - FALKORDB_ARGS=TIMEOUT_DEFAULT 30000 TIMEOUT_MAX 60000
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -34,11 +37,14 @@ services:
     environment:
       # Secure defaults for production: disable the debugger; provide SECRET_KEY in .env
       - FLASK_DEBUG=false
-      # gunicorn tuning: keep request handling single-threaded by default because
-      # long-running backend tasks are not broadly concurrency-hardened yet.
-      - GUNICORN_WORKERS=1 # 4
-      - GUNICORN_THREADS=1 # 2
+      # gunicorn: single worker for solo use — one heavy job gets the full process (no idle workers)
+      - GUNICORN_WORKERS=1
+      - GUNICORN_THREADS=1
       - GUNICORN_TIMEOUT=600
+      # CPU embedding (PyTorch / sentence-transformers): use all 4 cores on this host
+      - OMP_NUM_THREADS=${OMP_NUM_THREADS:-4}
+      - MKL_NUM_THREADS=${MKL_NUM_THREADS:-4}
+      - TOKENIZERS_PARALLELISM=false
       # Graph store connection (overrides .env so it always points at the compose service)
       - GRAPH_DB_HOST=falkordb
       - GRAPH_DB_PORT=6379
