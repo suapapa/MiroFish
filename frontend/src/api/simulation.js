@@ -185,3 +185,11 @@ export const interviewAgents = (data) => {
 export const getSimulationHistory = (limit = 20) => {
   return service.get('/api/simulation/history', { params: { limit } })
 }
+
+/**
+ * Delete a simulation history entry and related data
+ * @param {Object} data - { project_id, simulation_id?, report_id?, graph_id? }
+ */
+export const deleteHistoryEntry = (data) => {
+  return service.post('/api/simulation/history/delete', data)
+}

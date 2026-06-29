@@ -336,12 +336,21 @@
     "statusFailed": "构建失败",
     "roundsProgress": "{current}/{total} 轮",
     "untitledSimulation": "未命名模拟",
-    "unknownFile": "未知文件"
+    "unknownFile": "未知文件",
+    "delete": "删除",
+    "deleteConfirmTitle": "删除记录",
+    "deleteConfirmMessage": "将永久删除该推演记录及其关联的项目、图谱和报告数据，此操作不可恢复。",
+    "deleteConfirmButton": "删除",
+    "cancel": "取消",
+    "deleting": "删除中...",
+    "deleteSuccess": "记录已删除",
+    "deleteFailed": "删除失败"
   },
   "api": {
     "projectNotFound": "项目不存在: {id}",
     "projectDeleteFailed": "项目不存在或删除失败: {id}",
     "projectDeleted": "项目已删除: {id}",
+    "historyEntryDeleted": "推演记录已删除: {id}",
     "projectReset": "项目已重置: {id}",
     "requireSimulationRequirement": "请提供模拟需求描述 (simulation_requirement)",
     "requireFileUpload": "请至少上传一个文档文件",

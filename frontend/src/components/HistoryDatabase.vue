@@ -32,22 +32,31 @@
         <!-- Card header: simulation_id and feature availability -->
         <div class="card-header">
           <span class="card-id">{{ formatEntryId(project) }}</span>
-          <div class="card-status-icons">
-            <span 
-              class="status-icon" 
-              :class="{ available: project.project_id, unavailable: !project.project_id }"
-              :title="$t('history.graphBuild')"
-            >◇</span>
-            <span 
-              class="status-icon" 
-              :class="{ available: project.simulation_id, unavailable: !project.simulation_id }"
-              :title="$t('history.envSetup')"
-            >◈</span>
-            <span 
-              class="status-icon" 
-              :class="{ available: project.report_id, unavailable: !project.report_id }"
-              :title="$t('history.analysisReport')"
-            >◆</span>
+          <div class="card-header-actions">
+            <div class="card-status-icons">
+              <span 
+                class="status-icon" 
+                :class="{ available: project.project_id, unavailable: !project.project_id }"
+                :title="$t('history.graphBuild')"
+              >◇</span>
+              <span 
+                class="status-icon" 
+                :class="{ available: project.simulation_id, unavailable: !project.simulation_id }"
+                :title="$t('history.envSetup')"
+              >◈</span>
+              <span 
+                class="status-icon" 
+                :class="{ available: project.report_id, unavailable: !project.report_id }"
+                :title="$t('history.analysisReport')"
+              >◆</span>
+            </div>
+            <button
+              type="button"
+              class="card-delete-btn"
+              :title="$t('history.delete')"
+              :aria-label="$t('history.delete')"
+              @click.stop="openDeleteConfirm(project)"
+            >×</button>
           </div>
         </div>
 
@@ -185,6 +194,56 @@
             <div class="modal-playback-hint">
               <span class="hint-text">{{ $t('history.replayHint') }}</span>
             </div>
+
+            <!-- Delete action -->
+            <div class="modal-delete-section">
+              <button
+                type="button"
+                class="modal-delete-btn"
+                @click="openDeleteConfirm(selectedProject)"
+              >
+                <span class="delete-icon">×</span>
+                <span>{{ $t('history.delete') }}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+
+    <!-- Delete confirmation modal -->
+    <Teleport to="body">
+      <Transition name="modal">
+        <div v-if="pendingDelete" class="modal-overlay" @click.self="cancelDelete">
+          <div class="modal-content confirm-dialog">
+            <div class="confirm-header">
+              <span class="confirm-id">{{ formatEntryId(pendingDelete) }}</span>
+              <button class="modal-close" @click="cancelDelete" :disabled="deleting">×</button>
+            </div>
+            <div class="confirm-body">
+              <h3 class="confirm-title">{{ $t('history.deleteConfirmTitle') }}</h3>
+              <p class="confirm-message">{{ $t('history.deleteConfirmMessage') }}</p>
+              <p v-if="deleteError" class="confirm-error">{{ deleteError }}</p>
+            </div>
+            <div class="confirm-actions">
+              <button
+                type="button"
+                class="confirm-btn confirm-cancel"
+                @click="cancelDelete"
+                :disabled="deleting"
+              >
+                {{ $t('history.cancel') }}
+              </button>
+              <button
+                type="button"
+                class="confirm-btn confirm-delete"
+                @click="executeDelete"
+                :disabled="deleting"
+              >
+                <span v-if="deleting" class="confirm-spinner"></span>
+                {{ deleting ? $t('history.deleting') : $t('history.deleteConfirmButton') }}
+              </button>
+            </div>
           </div>
         </div>
       </Transition>
@@ -196,7 +255,7 @@
 import { ref, computed, onMounted, onUnmounted, onActivated, watch, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { getSimulationHistory } from '../api/simulation'
+import { getSimulationHistory, deleteHistoryEntry } from '../api/simulation'
 
 const router = useRouter()
 const route = useRoute()
@@ -209,6 +268,9 @@ const isExpanded = ref(false)
 const hoveringCard = ref(null)
 const historyContainer = ref(null)
 const selectedProject = ref(null)  // Currently selected project (for modal)
+const pendingDelete = ref(null)    // Project pending deletion confirmation
+const deleting = ref(false)
+const deleteError = ref('')
 let observer = null
 let isAnimating = false  // Animation lock to prevent flicker
 let expandDebounceTimer = null  // Debounce timer
@@ -433,6 +495,57 @@ const navigateToProject = (simulation) => {
 // Close modal
 const closeModal = () => {
   selectedProject.value = null
+}
+
+const openDeleteConfirm = (project) => {
+  if (!project?.project_id) return
+  pendingDelete.value = project
+  deleteError.value = ''
+}
+
+const cancelDelete = () => {
+  if (deleting.value) return
+  pendingDelete.value = null
+  deleteError.value = ''
+}
+
+const executeDelete = async () => {
+  const project = pendingDelete.value
+  if (!project?.project_id || deleting.value) return
+
+  deleting.value = true
+  deleteError.value = ''
+
+  try {
+    const response = await deleteHistoryEntry({
+      project_id: project.project_id,
+      simulation_id: project.simulation_id || undefined,
+      report_id: project.report_id || undefined,
+      graph_id: project.graph_id || undefined,
+    })
+
+    if (!response.success) {
+      throw new Error(response.error || t('history.deleteFailed'))
+    }
+
+    projects.value = projects.value.filter((item) => {
+      if (project.simulation_id && item.simulation_id) {
+        return item.simulation_id !== project.simulation_id
+      }
+      return item.project_id !== project.project_id
+    })
+
+    if (selectedProject.value?.project_id === project.project_id) {
+      closeModal()
+    }
+
+    pendingDelete.value = null
+  } catch (error) {
+    console.error('Failed to delete history entry:', error)
+    deleteError.value = error.message || t('history.deleteFailed')
+  } finally {
+    deleting.value = false
+  }
 }
 
 // Navigate to graph build page (Project)
@@ -735,6 +848,47 @@ onUnmounted(() => {
   color: #6B7280;
   letter-spacing: 0.5px;
   font-weight: 500;
+}
+
+.card-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.card-delete-btn {
+  width: 22px;
+  height: 22px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: #D1D5DB;
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: all 0.2s ease;
+  border-radius: 4px;
+  padding: 0;
+}
+
+.project-card:hover .card-delete-btn,
+.project-card.hovering .card-delete-btn {
+  opacity: 1;
+}
+
+.card-delete-btn:hover {
+  color: #C5283D;
+  border-color: rgba(197, 40, 61, 0.25);
+  background: rgba(197, 40, 61, 0.06);
+}
+
+@media (hover: none) {
+  .card-delete-btn {
+    opacity: 1;
+  }
 }
 
 /* Feature status icon group */
@@ -1370,5 +1524,148 @@ onUnmounted(() => {
   letter-spacing: 0.3px;
   text-align: center;
   line-height: 1.5;
+}
+
+/* Modal delete section */
+.modal-delete-section {
+  display: flex;
+  justify-content: center;
+  padding: 0 32px 24px;
+  background: #FFFFFF;
+  border-top: 1px solid #F3F4F6;
+}
+
+.modal-delete-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border: 1px solid #F3D4D8;
+  border-radius: 6px;
+  background: #FFFBFC;
+  color: #C5283D;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.modal-delete-btn:hover {
+  border-color: #C5283D;
+  background: rgba(197, 40, 61, 0.06);
+}
+
+.delete-icon {
+  font-size: 1rem;
+  line-height: 1;
+}
+
+/* Delete confirmation dialog */
+.confirm-dialog {
+  width: 420px;
+}
+
+.confirm-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 18px 24px;
+  border-bottom: 1px solid #F3F4F6;
+}
+
+.confirm-id {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #6B7280;
+  letter-spacing: 0.5px;
+}
+
+.confirm-body {
+  padding: 24px;
+}
+
+.confirm-title {
+  margin: 0 0 10px;
+  font-family: 'Inter', sans-serif;
+  font-size: 1rem;
+  font-weight: 700;
+  color: #111827;
+}
+
+.confirm-message {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #6B7280;
+  line-height: 1.6;
+}
+
+.confirm-error {
+  margin: 12px 0 0;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.72rem;
+  color: #C5283D;
+  line-height: 1.5;
+}
+
+.confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 0 24px 24px;
+}
+
+.confirm-btn {
+  min-width: 88px;
+  padding: 10px 16px;
+  border-radius: 6px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.confirm-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.confirm-cancel {
+  border: 1px solid #E5E7EB;
+  background: #FFFFFF;
+  color: #6B7280;
+}
+
+.confirm-cancel:hover:not(:disabled) {
+  border-color: #D1D5DB;
+  color: #111827;
+}
+
+.confirm-delete {
+  border: 1px solid #C5283D;
+  background: #C5283D;
+  color: #FFFFFF;
+}
+
+.confirm-delete:hover:not(:disabled) {
+  background: #A82134;
+  border-color: #A82134;
+}
+
+.confirm-spinner {
+  width: 12px;
+  height: 12px;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-top-color: #FFFFFF;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
 }
 </style>

@@ -336,12 +336,21 @@
     "statusFailed": "구축 실패",
     "roundsProgress": "{current}/{total} 라운드",
     "untitledSimulation": "제목 없는 시뮬레이션",
-    "unknownFile": "알 수 없는 파일"
+    "unknownFile": "알 수 없는 파일",
+    "delete": "삭제",
+    "deleteConfirmTitle": "기록 삭제",
+    "deleteConfirmMessage": "이 시뮬레이션 기록과 관련된 프로젝트, 그래프, 리포트 데이터가 모두 삭제됩니다. 이 작업은 되돌릴 수 없습니다.",
+    "deleteConfirmButton": "삭제",
+    "cancel": "취소",
+    "deleting": "삭제 중...",
+    "deleteSuccess": "기록이 삭제되었습니다",
+    "deleteFailed": "삭제에 실패했습니다"
   },
   "api": {
     "projectNotFound": "프로젝트를 찾을 수 없습니다: {id}",
     "projectDeleteFailed": "프로젝트를 찾을 수 없거나 삭제에 실패했습니다: {id}",
     "projectDeleted": "프로젝트가 삭제되었습니다: {id}",
+    "historyEntryDeleted": "시뮬레이션 기록이 삭제되었습니다: {id}",
     "projectReset": "프로젝트가 초기화되었습니다: {id}",
     "requireSimulationRequirement": "시뮬레이션 요구사항(simulation_requirement)을 제공해 주세요",
     "requireFileUpload": "문서 파일을 하나 이상 업로드해 주세요",

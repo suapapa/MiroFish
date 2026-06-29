@@ -336,12 +336,21 @@
     "statusFailed": "Build failed",
     "roundsProgress": "{current}/{total} rounds",
     "untitledSimulation": "Untitled simulation",
-    "unknownFile": "Unknown file"
+    "unknownFile": "Unknown file",
+    "delete": "Delete",
+    "deleteConfirmTitle": "Delete Record",
+    "deleteConfirmMessage": "This will permanently delete the simulation record and all related project, graph, and report data. This action cannot be undone.",
+    "deleteConfirmButton": "Delete",
+    "cancel": "Cancel",
+    "deleting": "Deleting...",
+    "deleteSuccess": "Record deleted",
+    "deleteFailed": "Failed to delete record"
   },
   "api": {
     "projectNotFound": "Project not found: {id}",
     "projectDeleteFailed": "Project not found or deletion failed: {id}",
     "projectDeleted": "Project deleted: {id}",
+    "historyEntryDeleted": "History entry deleted: {id}",
     "projectReset": "Project reset: {id}",
     "requireSimulationRequirement": "Please provide a simulation requirement (simulation_requirement)",
     "requireFileUpload": "Please upload at least one document file",

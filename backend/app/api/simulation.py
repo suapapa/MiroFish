@@ -14,6 +14,8 @@ from ..services.zep_entity_reader import ZepEntityReader
 from ..services.oasis_profile_generator import OasisProfileGenerator
 from ..services.simulation_manager import SimulationManager, SimulationStatus
 from ..services.simulation_runner import SimulationRunner, RunnerStatus
+from ..services.graph_builder import GraphBuilderService
+from ..services.report_agent import ReportManager
 from ..utils.logger import get_logger
 from ..utils.locale import t, get_locale, set_locale
 from ..utils.prompts import get_prompt
@@ -1062,6 +1064,83 @@ def get_simulation_history():
         
     except Exception as e:
         logger.error(f"Failed to get simulation history: {str(e)}")
+        return jsonify({
+            "success": False,
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }), 500
+
+
+@simulation_bp.route('/history/delete', methods=['POST'])
+def delete_history_entry():
+    """
+        Delete a history entry and its related project, simulation, report, and graph data.
+
+            Request (JSON):
+                {
+                    "project_id": "proj_xxxx",        // required
+                    "simulation_id": "sim_xxxx",      // optional
+                    "report_id": "report_xxxx",       // optional
+                    "graph_id": "graph_xxxx"          // optional
+                }
+    """
+    try:
+        data = request.get_json() or {}
+        project_id = data.get('project_id')
+        if not project_id:
+            return jsonify({
+                "success": False,
+                "error": t('api.requireProjectId')
+            }), 400
+
+        simulation_id = data.get('simulation_id')
+        report_id = data.get('report_id')
+        graph_id = data.get('graph_id')
+
+        project = ProjectManager.get_project(project_id)
+        if not project and not simulation_id:
+            return jsonify({
+                "success": False,
+                "error": t('api.projectNotFound', id=project_id)
+            }), 404
+
+        if not graph_id and project:
+            graph_id = project.graph_id
+
+        if simulation_id:
+            try:
+                SimulationRunner.stop_simulation(simulation_id)
+            except Exception as stop_error:
+                logger.warning(f"Failed to stop simulation before delete: {simulation_id}, error={stop_error}")
+
+            manager = SimulationManager()
+            manager.delete_simulation(simulation_id)
+
+        if report_id:
+            ReportManager.delete_report(report_id)
+        elif simulation_id:
+            for report in ReportManager.list_reports(simulation_id=simulation_id, limit=100):
+                ReportManager.delete_report(report.report_id)
+
+        if graph_id:
+            try:
+                GraphBuilderService().delete_graph(graph_id)
+            except Exception as graph_error:
+                logger.warning(f"Failed to delete graph during history delete: {graph_id}, error={graph_error}")
+
+        if not ProjectManager.delete_project(project_id):
+            return jsonify({
+                "success": False,
+                "error": t('api.projectDeleteFailed', id=project_id)
+            }), 404
+
+        return jsonify({
+            "success": True,
+            "message": t('api.historyEntryDeleted', id=project_id)
+        })
+
+    except Exception as e:
+        logger.error(f"Failed to delete history entry: {str(e)}")
         return jsonify({
             "success": False,
             "error": str(e),

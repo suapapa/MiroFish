@@ -513,6 +513,21 @@ ENDPOINT_DOCS: dict[str, dict[str, Any]] = {
         "Returns an enriched history list combining simulations, projects, run status, and report references.",
         parameters=[qp("limit", "Maximum number of history entries to return.", "integer", default=20)],
     ),
+    "simulation.delete_history_entry": doc(
+        "Simulations",
+        "Delete history entry",
+        "Deletes a history entry and its related project, simulation, report, and graph data.",
+        request_body=json_body(
+            {
+                "project_id": PROJECT_ID,
+                "simulation_id": SIMULATION_ID,
+                "report_id": {"type": "string", "example": "report_123456789abc"},
+                "graph_id": {"type": "string", "example": "graph_123456789abc"},
+            },
+            required=["project_id"],
+            example={"project_id": "proj_123456789abc", "simulation_id": "sim_123456789abc"},
+        ),
+    ),
     "simulation.get_simulation_profiles": doc(
         "Profiles",
         "Get simulation profiles",

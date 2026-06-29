@@ -462,6 +462,17 @@ class SimulationManager:
             self._save_simulation_state(state)
             raise
     
+    def delete_simulation(self, simulation_id: str) -> bool:
+        """Delete simulation data directory and in-memory cache entry."""
+        sim_dir = os.path.join(self.SIMULATION_DATA_DIR, simulation_id)
+        if not os.path.exists(sim_dir):
+            return False
+
+        shutil.rmtree(sim_dir)
+        self._simulations.pop(simulation_id, None)
+        logger.info(f"Deleted simulation: {simulation_id}")
+        return True
+
     def get_simulation(self, simulation_id: str) -> Optional[SimulationState]:
         """Get simulation status"""
         return self._load_simulation_state(simulation_id)
