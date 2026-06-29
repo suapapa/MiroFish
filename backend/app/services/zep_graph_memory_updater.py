@@ -227,7 +227,7 @@ class ZepGraphMemoryUpdater:
     
     # Retry configuration
     MAX_RETRIES = 3
-    # Second
+    RETRY_DELAY = 2
     
     def __init__(self, graph_id: str, api_key: Optional[str] = None):
         """
@@ -257,12 +257,12 @@ class ZepGraphMemoryUpdater:
         self._worker_thread: Optional[threading.Thread] = None
         
         # statistics
-        # Number of activities actually added to the queue
-        # Number of batches successfully sent to Zep
-        # Number of events successfully sent to Zep
-        # Number of batches that failed to be sent
-        # Number of activities skipped by filtering (DO_NOTHING)
-        
+        self._total_activities = 0
+        self._total_sent = 0
+        self._total_items_sent = 0
+        self._failed_count = 0
+        self._skipped_count = 0
+
         logger.info(f"ZepGraphMemoryUpdater initialized: graph_id={graph_id}, batch_size={self.BATCH_SIZE}")
     
     def _get_platform_display_name(self, platform: str) -> str:

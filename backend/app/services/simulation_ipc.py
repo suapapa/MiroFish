@@ -24,9 +24,9 @@ logger = get_logger('mirofish.simulation_ipc')
 
 class CommandType(str, Enum):
     """Command type"""
-    # Single Agent Interview
-    # batch interviews
-    # Close environment
+    INTERVIEW = "interview"
+    BATCH_INTERVIEW = "batch_interview"
+    CLOSE_ENV = "close_env"
 
 
 class CommandStatus(str, Enum):

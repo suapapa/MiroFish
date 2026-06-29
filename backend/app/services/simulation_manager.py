@@ -29,8 +29,8 @@ class SimulationStatus(str, Enum):
     READY = "ready"
     RUNNING = "running"
     PAUSED = "paused"
-    # Simulation was stopped manually
-    # Simulation completed naturally
+    STOPPED = "stopped"
+    COMPLETED = "completed"
     FAILED = "failed"
 
 
@@ -346,10 +346,10 @@ class SimulationManager:
                 entities=filtered.entities,
                 use_llm=use_llm_for_profiles,
                 progress_callback=profile_progress,
-                # Pass in graph_id for Zep retrieval
-                # Number of parallel builds
-                # Save path in real time
-                # Output format
+                graph_id=state.graph_id,
+                parallel_count=parallel_profile_count,
+                realtime_output_path=realtime_output_path,
+                output_platform=realtime_platform,
             )
             
             state.profiles_count = len(profiles)

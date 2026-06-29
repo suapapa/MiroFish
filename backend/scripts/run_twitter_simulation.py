@@ -255,8 +255,8 @@ class IPCHandler:
         try:
             # Build action dictionary
             actions = {}
-            # Record prompts for each agent
-            
+            agent_prompts = {}
+
             for interview in interviews:
                 agent_id = interview.get("agent_id")
                 prompt = interview.get("prompt", "")
@@ -594,7 +594,7 @@ class TwitterSimulationRunner:
             agent_graph=self.agent_graph,
             platform=oasis.DefaultPlatformType.TWITTER,
             database_path=db_path,
-            # Limit the maximum number of concurrent LLM requests to prevent API overload
+            semaphore=30,
         )
         
         await self.env.reset()

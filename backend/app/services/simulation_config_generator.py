@@ -39,11 +39,11 @@ CHINA_TIMEZONE_CONFIG = {
     "night_hours": [23],
     # activity coefficient
     "activity_multipliers": {
-        # Almost no one in the early morning
-        # Become more active in the morning
-        # Moderate working hours
-        # evening peak
-        # late night drop
+        "dead": 0.05,
+        "morning": 0.4,
+        "work": 0.7,
+        "peak": 1.5,
+        "night": 0.5,
     },
 }
 
@@ -58,7 +58,7 @@ class AgentActivityConfig:
     entity_type: str
 
     # Liveness configuration (0.0-1.0)
-    # Overall activity
+    activity_level: float = 0.5
 
     # Speech frequency (expected number of speeches per hour)
     posts_per_hour: float = 1.0
@@ -85,8 +85,7 @@ class AgentActivityConfig:
 class TimeSimulationConfig:
     """Time simulation configuration (based on Chinese people’s work and rest habits)"""
 
-    # Total simulation duration (simulation hours)
-    # Default simulation is 72 hours (3 days)
+    total_simulation_hours: int = 72
 
     # Time represented in each round (simulation minutes) - Default is 60 minutes (1 hour) to speed up time flow
     minutes_per_round: int = 60
@@ -101,7 +100,7 @@ class TimeSimulationConfig:
 
     # Low hours (0-5am, almost no one active)
     off_peak_hours: List[int] = field(default_factory=lambda: [0, 1, 2, 3, 4, 5])
-    # Very low activity in the early morning
+    off_peak_activity_multiplier: float = 0.05
 
     # morning session
     morning_hours: List[int] = field(default_factory=lambda: [6, 7, 8])
@@ -137,10 +136,9 @@ class PlatformConfig:
 
     platform: str  # twitter or reddit
 
-    # Recommended algorithm weight
-    # time freshness
-    # heat
-    # Relevance
+    recency_weight: float = 0.4
+    popularity_weight: float = 0.3
+    relevance_weight: float = 0.3
 
     # Viral spread threshold (how many interactions are reached before spreading is triggered)
     viral_threshold: int = 10
@@ -178,7 +176,7 @@ class SimulationParameters:
 
     # Generate metadata
     generated_at: str = field(default_factory=lambda: datetime.now().isoformat())
-    # LLM reasoning explanation
+    generation_reasoning: str = ""
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary"""
@@ -485,8 +483,7 @@ class SimulationConfigGenerator:
                         {"role": "user", "content": prompt},
                     ],
                     response_format={"type": "json_object"},
-                    # Lower the temperature each time you retry
-                    # Do not set max_tokens and let LLM play freely
+                    temperature=0.7 - (attempt * 0.1),
                 )
 
                 content = response.choices[0].message.content
@@ -603,7 +600,7 @@ class SimulationConfigGenerator:
         """Get the default time configuration (default daily activity pattern)"""
         return {
             "total_simulation_hours": 72,
-            # Each round is 1 hour, speeding up the flow of time
+            "minutes_per_round": 60,
             "agents_per_hour_min": max(1, num_entities // 15),
             "agents_per_hour_max": max(5, num_entities // 5),
             "peak_hours": [19, 20, 21, 22],
@@ -647,12 +644,12 @@ class SimulationConfigGenerator:
 
         return TimeSimulationConfig(
             total_simulation_hours=result.get("total_simulation_hours", 72),
-            # Default is 1 hour per round
+            minutes_per_round=result.get("minutes_per_round", 60),
             agents_per_hour_min=agents_per_hour_min,
             agents_per_hour_max=agents_per_hour_max,
             peak_hours=result.get("peak_hours", [19, 20, 21, 22]),
             off_peak_hours=result.get("off_peak_hours", [0, 1, 2, 3, 4, 5]),
-            # Almost no one in the early morning
+            off_peak_activity_multiplier=0.05,
             morning_hours=result.get("morning_hours", [6, 7, 8]),
             morning_activity_multiplier=0.4,
             work_hours=result.get("work_hours", list(range(9, 19))),
@@ -927,7 +924,7 @@ class SimulationConfigGenerator:
                 "activity_level": 0.8,
                 "posts_per_hour": 0.6,
                 "comments_per_hour": 1.5,
-                # morning + evening
+                "active_hours": [8, 9, 10, 11, 12, 13, 18, 19, 20, 21, 22, 23],
                 "response_delay_min": 1,
                 "response_delay_max": 15,
                 "sentiment_bias": 0.0,
@@ -940,7 +937,7 @@ class SimulationConfigGenerator:
                 "activity_level": 0.6,
                 "posts_per_hour": 0.4,
                 "comments_per_hour": 0.8,
-                # Lunch break + evening
+                "active_hours": [12, 13, 19, 20, 21, 22, 23],
                 "response_delay_min": 5,
                 "response_delay_max": 30,
                 "sentiment_bias": 0.0,
@@ -953,7 +950,7 @@ class SimulationConfigGenerator:
                 "activity_level": 0.7,
                 "posts_per_hour": 0.5,
                 "comments_per_hour": 1.2,
-                # day + night
+                "active_hours": [9, 10, 11, 12, 13, 18, 19, 20, 21, 22, 23],
                 "response_delay_min": 2,
                 "response_delay_max": 20,
                 "sentiment_bias": 0.0,

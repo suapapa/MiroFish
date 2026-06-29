@@ -1661,9 +1661,9 @@ def start_simulation():
             }), 400
 
         platform = data.get('platform', 'parallel')
-        # Optional: Maximum number of simulation rounds
-        # Optional: Whether to enable map memory update
-        # Optional: force a restart
+        max_rounds = data.get('max_rounds')
+        enable_graph_memory_update = data.get('enable_graph_memory_update', False)
+        force = data.get('force', False)
 
         # Verify max_rounds parameter
         if max_rounds is not None:
