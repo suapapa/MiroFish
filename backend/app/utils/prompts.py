@@ -20,7 +20,7 @@ _PROMPTS_DIR = os.path.join(os.path.dirname(__file__), "..", "prompts")
 
 # Select language-specific prompt file.
 #  - PROMPT_LANG env (e.g. en / ko / zh) chooses which yaml to load.
-#  - Uses prompt_{lang}.yaml when present, else default Chinese prompts.yaml.
+#  - Uses prompt_{lang}.yaml when present, else default English prompts.yaml.
 #  - en uses legacy prompts.yaml as the default.
 _DEFAULT_PROMPTS_FILE = "prompts.yaml"
 

@@ -391,15 +391,15 @@ class OasisProfileGenerator:
                     if hasattr(node, 'summary') and node.summary:
                         all_summaries.add(node.summary)
                     if hasattr(node, 'name') and node.name and node.name != entity_name:
-                        all_summaries.add(f"相关实体: {node.name}")
+                        all_summaries.add(f"Related entity: {node.name}")
             results["node_summaries"] = list(all_summaries)
             
             # Build comprehensive context
             context_parts = []
             if results["facts"]:
-                context_parts.append("事实信息:\n" + "\n".join(f"- {f}" for f in results["facts"][:20]))
+                context_parts.append("Facts:\n" + "\n".join(f"- {f}" for f in results["facts"][:20]))
             if results["node_summaries"]:
-                context_parts.append("相关实体:\n" + "\n".join(f"- {s}" for s in results["node_summaries"][:10]))
+                context_parts.append("Related entities:\n" + "\n".join(f"- {s}" for s in results["node_summaries"][:10]))
             results["context"] = "\n\n".join(context_parts)
             
             logger.info(f"Zep hybrid search completed: {entity_name}, retrieved {len(results['facts'])} facts, {len(results['node_summaries'])} related nodes")
@@ -429,7 +429,7 @@ class OasisProfileGenerator:
                 if value and str(value).strip():
                     attrs.append(f"- {key}: {value}")
             if attrs:
-                context_parts.append("### 实体属性\n" + "\n".join(attrs))
+                context_parts.append("### Entity Attributes\n" + "\n".join(attrs))
         
         # 2. Add relevant side information (facts/relationships)
         existing_facts = set()
@@ -445,12 +445,12 @@ class OasisProfileGenerator:
                     existing_facts.add(fact)
                 elif edge_name:
                     if direction == "outgoing":
-                        relationships.append(f"- {entity.name} --[{edge_name}]--> (相关实体)")
+                        relationships.append(f"- {entity.name} --[{edge_name}]--> (related entity)")
                     else:
-                        relationships.append(f"- (相关实体) --[{edge_name}]--> {entity.name}")
+                        relationships.append(f"- (related entity) --[{edge_name}]--> {entity.name}")
             
             if relationships:
-                context_parts.append("### 相关事实和关系\n" + "\n".join(relationships))
+                context_parts.append("### Related Facts and Relationships\n" + "\n".join(relationships))
         
         # 3. Add detailed information about associated nodes
         if entity.related_nodes:
@@ -470,7 +470,7 @@ class OasisProfileGenerator:
                     related_info.append(f"- **{node_name}**{label_str}")
             
             if related_info:
-                context_parts.append("### 关联实体信息\n" + "\n".join(related_info))
+                context_parts.append("### Related Entity Details\n" + "\n".join(related_info))
         
         # 4. Use Zep hybrid search to obtain richer information
         zep_results = self._search_zep_for_entity(entity)
@@ -479,10 +479,10 @@ class OasisProfileGenerator:
             # Deduplication: exclude existing facts
             new_facts = [f for f in zep_results["facts"] if f not in existing_facts]
             if new_facts:
-                context_parts.append("### Zep检索到的事实信息\n" + "\n".join(f"- {f}" for f in new_facts[:15]))
+                context_parts.append("### Facts Retrieved from Zep\n" + "\n".join(f"- {f}" for f in new_facts[:15]))
         
         if zep_results.get("node_summaries"):
-            context_parts.append("### Zep检索到的相关节点\n" + "\n".join(f"- {s}" for s in zep_results["node_summaries"][:10]))
+            context_parts.append("### Related Nodes Retrieved from Zep\n" + "\n".join(f"- {s}" for s in zep_results["node_summaries"][:10]))
         
         return "\n\n".join(context_parts)
     
@@ -554,7 +554,7 @@ class OasisProfileGenerator:
                     if "bio" not in result or not result["bio"]:
                         result["bio"] = entity_summary[:200] if entity_summary else f"{entity_type}: {entity_name}"
                     if "persona" not in result or not result["persona"]:
-                        result["persona"] = entity_summary or f"{entity_name}是一个{entity_type}。"
+                        result["persona"] = entity_summary or f"{entity_name} is a {entity_type}."
                     
                     return result
                     
@@ -651,7 +651,7 @@ class OasisProfileGenerator:
         persona_match = re.search(r'"persona"\s*:\s*"([^"]*)', content)  # may be truncated
         
         bio = bio_match.group(1) if bio_match else (entity_summary[:200] if entity_summary else f"{entity_type}: {entity_name}")
-        persona = persona_match.group(1) if persona_match else (entity_summary or f"{entity_name}是一个{entity_type}。")
+        persona = persona_match.group(1) if persona_match else (entity_summary or f"{entity_name} is a {entity_type}.")
         
         # If meaningful content is extracted, mark it as fixed
         if bio_match or persona_match:
@@ -666,7 +666,7 @@ class OasisProfileGenerator:
         logger.warning(f"JSON repair failed, returning basic structure")
         return {
             "bio": entity_summary[:200] if entity_summary else f"{entity_type}: {entity_name}",
-            "persona": entity_summary or f"{entity_name}是一个{entity_type}。"
+            "persona": entity_summary or f"{entity_name} is a {entity_type}."
         }
     
     def _get_system_prompt(self, is_individual: bool) -> str:
@@ -684,8 +684,8 @@ class OasisProfileGenerator:
     ) -> str:
         """Construct detailed personality prompts for personal entities"""
         
-        attrs_str = json.dumps(entity_attributes, ensure_ascii=False) if entity_attributes else "无"
-        context_str = context[:3000] if context else "无额外上下文"
+        attrs_str = json.dumps(entity_attributes, ensure_ascii=False) if entity_attributes else "None"
+        context_str = context[:3000] if context else "No additional context"
         
         return get_prompt("oasis_profile.individual_user").format(
             entity_name=entity_name,
@@ -706,8 +706,8 @@ class OasisProfileGenerator:
     ) -> str:
         """Construct detailed personal prompts for groups/institutional entities"""
         
-        attrs_str = json.dumps(entity_attributes, ensure_ascii=False) if entity_attributes else "无"
-        context_str = context[:3000] if context else "无额外上下文"
+        attrs_str = json.dumps(entity_attributes, ensure_ascii=False) if entity_attributes else "None"
+        context_str = context[:3000] if context else "No additional context"
         
         return get_prompt("oasis_profile.group_user").format(
             entity_name=entity_name,
@@ -761,7 +761,7 @@ class OasisProfileGenerator:
                 "age": 30,  # Institutional virtual age
                 "gender": "other",  # Organization uses other
                 "mbti": "ISTJ",  # Institutional style: Rigorous and conservative
-                "country": "中国",
+                "country": "China",
                 "profession": "Media",
                 "interested_topics": ["General News", "Current Events", "Public Affairs"],
             }
@@ -773,7 +773,7 @@ class OasisProfileGenerator:
                 "age": 30,  # Institutional virtual age
                 "gender": "other",  # Organization uses other
                 "mbti": "ISTJ",  # Institutional style: Rigorous and conservative
-                "country": "中国",
+                "country": "China",
                 "profession": entity_type,
                 "interested_topics": ["Public Policy", "Community", "Official Announcements"],
             }
@@ -930,7 +930,7 @@ class OasisProfileGenerator:
                         progress_callback(
                             current, 
                             total, 
-                            f"已完成 {current}/{total}: {entity.name}（{entity_type}）"
+                            f"Completed {current}/{total}: {entity.name} ({entity_type})"
                         )
                     
                     if error:
@@ -1078,10 +1078,10 @@ class OasisProfileGenerator:
         
         # Chinese mapping
         gender_map = {
-            "男": "male",
-            "女": "female",
-            "机构": "other",
-            "其他": "other",
+            "\u7537": "male",
+            "\u5973": "female",
+            "\u673a\u6784": "other",
+            "\u5176\u4ed6": "other",
             # Already available in English
             "male": "male",
             "female": "female",
@@ -1123,7 +1123,7 @@ class OasisProfileGenerator:
                 "age": profile.age if profile.age else 30,
                 "gender": self._normalize_gender(profile.gender),
                 "mbti": profile.mbti if profile.mbti else "ISTJ",
-                "country": profile.country if profile.country else "中国",
+                "country": profile.country if profile.country else "China",
             }
             
             # optional fields
@@ -1149,4 +1149,3 @@ class OasisProfileGenerator:
         """[Deprecated] Please use save_profiles() method"""
         logger.warning("save_profiles_to_json is deprecated, please use the save_profiles method")
         self.save_profiles(profiles, file_path, platform)
-

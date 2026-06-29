@@ -581,32 +581,32 @@ class ReportAgent:
                 "name": "insight_forge",
                 "description": TOOL_DESC_INSIGHT_FORGE,
                 "parameters": {
-                    "query": "你想深入分析的问题或话题",
-                    "report_context": "当前报告章节的上下文（可选，有助于生成更精准的子问题）"
+                    "query": "Question or topic to analyze in depth",
+                    "report_context": "Current report section context (optional, helps generate more precise sub-questions)"
                 }
             },
             "panorama_search": {
                 "name": "panorama_search",
                 "description": TOOL_DESC_PANORAMA_SEARCH,
                 "parameters": {
-                    "query": "搜索查询，用于相关性排序",
-                    "include_expired": "是否包含过期/历史内容（默认True）"
+                    "query": "Search query used for relevance ranking",
+                    "include_expired": "Whether to include expired or historical content (default: True)"
                 }
             },
             "quick_search": {
                 "name": "quick_search",
                 "description": TOOL_DESC_QUICK_SEARCH,
                 "parameters": {
-                    "query": "搜索查询字符串",
-                    "limit": "返回结果数量（可选，默认10）"
+                    "query": "Search query string",
+                    "limit": "Number of results to return (optional, default: 10)"
                 }
             },
             "interview_agents": {
                 "name": "interview_agents",
                 "description": TOOL_DESC_INTERVIEW_AGENTS,
                 "parameters": {
-                    "interview_topic": "采访主题或需求描述（如：'了解学生对宿舍甲醛事件的看法'）",
-                    "max_agents": "最多采访的Agent数量（可选，默认5，最大10）"
+                    "interview_topic": "Interview topic or requirement description (for example: 'Understand students' views on the dormitory formaldehyde incident')",
+                    "max_agents": "Maximum number of agents to interview (optional, default: 5, max: 10)"
                 }
             }
         }
@@ -713,11 +713,11 @@ class ReportAgent:
                 return json.dumps(result, ensure_ascii=False, indent=2)
             
             else:
-                return f"未知工具: {tool_name}。请使用以下工具之一: insight_forge, panorama_search, quick_search"
+                return f"Unknown tool: {tool_name}. Please use one of: insight_forge, panorama_search, quick_search"
                 
         except Exception as e:
             logger.error(t('report.toolExecFailed', toolName=tool_name, error=str(e)))
-            return f"工具执行失败: {str(e)}"
+            return f"Tool execution failed: {str(e)}"
     
     # A collection of legal tool names for verification when parsing bare JSON
     VALID_TOOL_NAMES = {"insight_forge", "panorama_search", "quick_search", "interview_agents"}
@@ -784,12 +784,12 @@ class ReportAgent:
     
     def _get_tools_description(self) -> str:
         """Generate tool description text"""
-        desc_parts = ["可用工具："]
+        desc_parts = ["Available tools:"]
         for name, tool in self.tools.items():
             params_desc = ", ".join([f"{k}: {v}" for k, v in tool["parameters"].items()])
             desc_parts.append(f"- {name}: {tool['description']}")
             if params_desc:
-                desc_parts.append(f"  参数: {params_desc}")
+                desc_parts.append(f"  Parameters: {params_desc}")
         return "\n".join(desc_parts)
     
     def plan_outline(
@@ -852,7 +852,7 @@ class ReportAgent:
                 ))
             
             outline = ReportOutline(
-                title=response.get("title", "模拟分析报告"),
+                title=response.get("title", "Simulation Analysis Report"),
                 summary=response.get("summary", ""),
                 sections=sections
             )
@@ -867,12 +867,12 @@ class ReportAgent:
             logger.error(t('report.outlinePlanFailed', error=str(e)))
             # Return to default outline (3 chapters, as fallback)
             return ReportOutline(
-                title="未来预测报告",
-                summary="基于模拟预测的未来趋势与风险分析",
+                title="Future Forecast Report",
+                summary="Analysis of future trends and risks based on simulation forecasts",
                 sections=[
-                    ReportSection(title="预测场景与核心发现"),
-                    ReportSection(title="人群行为预测分析"),
-                    ReportSection(title="趋势展望与风险提示")
+                    ReportSection(title="Forecast Scenario and Key Findings"),
+                    ReportSection(title="Population Behavior Forecast Analysis"),
+                    ReportSection(title="Trend Outlook and Risk Signals")
                 ]
             )
     
@@ -928,7 +928,7 @@ class ReportAgent:
                 previous_parts.append(truncated)
             previous_content = "\n\n---\n\n".join(previous_parts)
         else:
-            previous_content = "（这是第一个章节）"
+            previous_content = "(This is the first section.)"
         
         user_prompt = SECTION_USER_PROMPT_TEMPLATE.format(
             previous_content=previous_content,
@@ -949,7 +949,7 @@ class ReportAgent:
         all_tools = {"insight_forge", "panorama_search", "quick_search", "interview_agents"}
 
         # Report context for sub-issue generation in InsightForge
-        report_context = f"章节标题: {section.title}\n模拟需求: {self.simulation_requirement}"
+        report_context = f"Section title: {section.title}\nSimulation requirement: {self.simulation_requirement}"
         
         for iteration in range(max_iterations):
             if progress_callback:
@@ -971,8 +971,8 @@ class ReportAgent:
                 logger.warning(t('report.sectionIterNone', title=section.title, iteration=iteration + 1))
                 # If there are still more iterations left, add a message and try again
                 if iteration < max_iterations - 1:
-                    messages.append({"role": "assistant", "content": "（响应为空）"})
-                    messages.append({"role": "user", "content": "请继续生成内容。"})
+                    messages.append({"role": "assistant", "content": "(The response was empty.)"})
+                    messages.append({"role": "user", "content": "Please continue generating the content."})
                     continue
                 # The last iteration also returns None, jumping out of the loop and entering forced closing.
                 break
@@ -997,11 +997,11 @@ class ReportAgent:
                     messages.append({
                         "role": "user",
                         "content": (
-                            "【格式错误】你在一次回复中同时包含了工具调用和 Final Answer，这是不允许的。\n"
-                            "每次回复只能做以下两件事之一：\n"
-                            "- 调用一个工具（输出一个 <tool_call> 块，不要写 Final Answer）\n"
-                            "- 输出最终内容（以 'Final Answer:' 开头，不要包含 <tool_call>）\n"
-                            "请重新回复，只做其中一件事。"
+                            "[Format Error] Your reply included both a tool call and a Final Answer in the same response, which is not allowed.\n"
+                            "Each reply may do only one of the following:\n"
+                            "- Call one tool (output a single <tool_call> block, without Final Answer)\n"
+                            "- Output the final content (start with 'Final Answer:' and do not include <tool_call>)\n"
+                            "Please reply again and do only one of them."
                         ),
                     })
                     continue
@@ -1035,7 +1035,7 @@ class ReportAgent:
                 if tool_calls_count < min_tool_calls:
                     messages.append({"role": "assistant", "content": response})
                     unused_tools = all_tools - used_tools
-                    unused_hint = f"（这些工具还未使用，推荐用一下他们: {', '.join(unused_tools)}）" if unused_tools else ""
+                    unused_hint = f"(These tools have not been used yet and are recommended: {', '.join(unused_tools)})" if unused_tools else ""
                     messages.append({
                         "role": "user",
                         "content": REACT_INSUFFICIENT_TOOLS_MSG.format(
@@ -1131,7 +1131,7 @@ class ReportAgent:
             if tool_calls_count < min_tool_calls:
                 # The number of times the tool has been called is insufficient. Unused tools are recommended.
                 unused_tools = all_tools - used_tools
-                unused_hint = f"（这些工具还未使用，推荐用一下他们: {', '.join(unused_tools)}）" if unused_tools else ""
+                unused_hint = f"(These tools have not been used yet and are recommended: {', '.join(unused_tools)})" if unused_tools else ""
 
                 messages.append({
                     "role": "user",
@@ -1449,18 +1449,18 @@ class ReportAgent:
         # Get generated report content
         report_content = ""
         try:
-            report = ReportManager.get_report_by_simulation(self.simulation_id)
-            if report and report.markdown_content:
-                # Limit report length to avoid long context
-                report_content = report.markdown_content[:15000]
-                if len(report.markdown_content) > 15000:
-                    report_content += "\n\n... [报告内容已截断] ..."
+                report = ReportManager.get_report_by_simulation(self.simulation_id)
+                if report and report.markdown_content:
+                    # Limit report length to avoid long context
+                    report_content = report.markdown_content[:15000]
+                    if len(report.markdown_content) > 15000:
+                        report_content += "\n\n... [Report content truncated] ..."
         except Exception as e:
             logger.warning(t('report.fetchReportFailed', error=e))
         
         system_prompt = CHAT_SYSTEM_PROMPT_TEMPLATE.format(
             simulation_requirement=self.simulation_requirement,
-            report_content=report_content if report_content else "（暂无报告）",
+            report_content=report_content if report_content else "(No report available yet)",
             tools_description=self._get_tools_description(),
         )
         system_prompt = f"{system_prompt}\n\n{get_language_instruction()}"
@@ -1516,7 +1516,7 @@ class ReportAgent:
             
             # Add results to message
             messages.append({"role": "assistant", "content": response})
-            observation = "\n".join([f"[{r['tool']}结果]\n{r['result']}" for r in tool_results])
+            observation = "\n".join([f"[{r['tool']} result]\n{r['result']}" for r in tool_results])
             messages.append({
                 "role": "user",
                 "content": observation + CHAT_OBSERVATION_SUFFIX
