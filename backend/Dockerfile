@@ -41,20 +41,22 @@ ENV PYTHONUNBUFFERED=1 \
     FLASK_DEBUG=false \
     PATH="/app/.venv/bin:$PATH"
 
+# Create the runtime user before copying app files so ownership can be set during COPY
+RUN useradd --create-home --uid 10001 app
+
 # Keep the same directory layout as the source: /app/backend + /app/locales
 WORKDIR /app/backend
 
 # Copy the prebuilt virtual environment from the builder
-COPY --from=builder /app/.venv /app/.venv
+COPY --from=builder --chown=app:app /app/.venv /app/.venv
 
 # Copy backend source and shared locales (locale.py references ../../../locales)
-COPY backend/ /app/backend/
-COPY locales/ /app/locales/
+COPY --chown=app:app backend/ /app/backend/
+COPY --chown=app:app locales/ /app/locales/
 
-# Create a non-root user and prepare the upload directory
-RUN useradd --create-home --uid 10001 app \
-  && mkdir -p /app/backend/uploads \
-  && chown -R app:app /app
+# Prepare the upload directory for the non-root runtime user
+RUN mkdir -p /app/backend/uploads \
+  && chown app:app /app/backend/uploads
 USER app
 
 EXPOSE 5001
