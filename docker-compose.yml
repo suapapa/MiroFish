@@ -34,9 +34,10 @@ services:
     environment:
       # Secure defaults for production: disable the debugger; provide SECRET_KEY in .env
       - FLASK_DEBUG=false
-      # gunicorn tuning (adjust to the machine's core count)
-      - GUNICORN_WORKERS=4
-      - GUNICORN_THREADS=2
+      # gunicorn tuning: keep request handling single-threaded by default because
+      # long-running backend tasks are not broadly concurrency-hardened yet.
+      - GUNICORN_WORKERS=1 # 4
+      - GUNICORN_THREADS=1 # 2
       - GUNICORN_TIMEOUT=600
       # Graph store connection (overrides .env so it always points at the compose service)
       - GRAPH_DB_HOST=falkordb

@@ -196,7 +196,7 @@ Production hardening notes:
 - Backend runs under **gunicorn** (not the Flask dev server); the Werkzeug debugger is **off** by default (`FLASK_DEBUG=false`).
 - `SECRET_KEY` is **required** in production; the container refuses to start without it.
 - CORS is closed by default (same-origin via nginx). Override with `CORS_ORIGINS` (comma-separated, or `*`) only if you call the API cross-origin.
-- Frontend is a minified static build; tune gunicorn via `GUNICORN_WORKERS` / `GUNICORN_THREADS` / `GUNICORN_TIMEOUT`.
+- Frontend is a minified static build. Gunicorn defaults to one worker and one thread to avoid backend request concurrency; tune via `GUNICORN_WORKERS` / `GUNICORN_THREADS` / `GUNICORN_TIMEOUT` only after validating concurrent workloads.
 
 #### GPU acceleration (optional)
 

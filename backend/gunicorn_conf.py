@@ -21,8 +21,8 @@ class FilteredAccessLogger(Logger):
 
 logger_class = FilteredAccessLogger
 bind = '0.0.0.0:5001'
-workers = int(os.environ.get('GUNICORN_WORKERS', 4))
-threads = int(os.environ.get('GUNICORN_THREADS', 2))
+workers = int(os.environ.get('GUNICORN_WORKERS', 1))
+threads = int(os.environ.get('GUNICORN_THREADS', 1))
 timeout = int(os.environ.get('GUNICORN_TIMEOUT', 600))
 accesslog = '-'
 errorlog = '-'
