@@ -429,6 +429,7 @@ class SimulationConfigGenerator:
 
         current_length = sum(len(p) for p in context_parts)
         # Leave 500 characters margin
+        remaining_length = self.MAX_CONTEXT_LENGTH - current_length - 500
 
         if remaining_length > 0 and document_text:
             doc_text = document_text[:remaining_length]
