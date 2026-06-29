@@ -225,11 +225,11 @@ class SimulationConfigGenerator:
     AGENTS_PER_BATCH = 15
 
     # Context truncation length for each step (number of characters)
-    # Time configuration
-    # event configuration
-    # Entity summary
-    # Entity summary in Agent configuration
-    # Display quantity of each type of entity
+    TIME_CONFIG_CONTEXT_LENGTH = 10000
+    EVENT_CONFIG_CONTEXT_LENGTH = 8000
+    ENTITY_SUMMARY_LENGTH = 300
+    AGENT_SUMMARY_LENGTH = 300
+    ENTITIES_PER_TYPE_DISPLAY = 20
 
     def __init__(
         self,
