@@ -54,9 +54,9 @@ COPY --from=builder --chown=app:app /app/.venv /app/.venv
 COPY --chown=app:app backend/ /app/backend/
 COPY --chown=app:app locales/ /app/locales/
 
-# Prepare the upload directory for the non-root runtime user
-RUN mkdir -p /app/backend/uploads \
-  && chown app:app /app/backend/uploads
+# Prepare the upload and log directories for the non-root runtime user
+RUN mkdir -p /app/backend/uploads /app/backend/logs \
+  && chown -R app:app /app/backend/uploads /app/backend/logs
 USER app
 
 EXPOSE 5001
