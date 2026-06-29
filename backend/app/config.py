@@ -84,6 +84,11 @@ class Config:
     # Dimension must match embedding model (OpenAI text-embedding-3-small=1536,
     # Alibaba text-embedding-v3=1024). FalkorDB vector index depends on this.
     EMBEDDER_DIM = int(os.environ.get('EMBEDDER_DIM', '1536'))
+    # Dedupe repeated Graphiti embed calls (dedup search vs persistence) within a process
+    EMBEDDER_CACHE_ENABLED = os.environ.get('EMBEDDER_CACHE_ENABLED', 'true').lower() in (
+        '1', 'true', 'yes', 'on',
+    )
+    EMBEDDER_CACHE_MAX_SIZE = int(os.environ.get('EMBEDDER_CACHE_MAX_SIZE', '10000'))
     
     # File upload settings
     MAX_CONTENT_LENGTH = 50 * 1024 * 1024  # 50MB

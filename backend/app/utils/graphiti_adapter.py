@@ -31,6 +31,7 @@ from pydantic import BaseModel, Field, create_model
 
 from ..config import Config
 from .logger import get_logger
+from .caching_embedder import CachingEmbedder
 from .openai_client_factory import build_async_openai_client
 
 logger = get_logger('mirofish.graphiti_adapter')
@@ -366,6 +367,7 @@ def _create_graphiti():
     from graphiti_core.driver.falkordb_driver import FalkorDriver
     from graphiti_core.llm_client.config import LLMConfig
     from graphiti_core.embedder.openai import OpenAIEmbedder, OpenAIEmbedderConfig
+    from graphiti_core.embedder import EmbedderClient
     from graphiti_core.cross_encoder.openai_reranker_client import OpenAIRerankerClient
 
     driver = FalkorDriver(
@@ -417,7 +419,7 @@ def _create_graphiti():
             structured_output_mode=Config.LLM_STRUCTURED_OUTPUT_MODE,
         )
 
-    embedder = OpenAIEmbedder(
+    embedder: EmbedderClient = OpenAIEmbedder(
         config=OpenAIEmbedderConfig(
             api_key=Config.EMBEDDER_API_KEY,
             base_url=Config.EMBEDDER_BASE_URL,
@@ -426,6 +428,12 @@ def _create_graphiti():
         ),
         client=embedder_sdk_client,
     )
+    if Config.EMBEDDER_CACHE_ENABLED:
+        embedder = CachingEmbedder(embedder, max_size=Config.EMBEDDER_CACHE_MAX_SIZE)
+        logger.info(
+            'Embedder LRU cache enabled (max_size=%d)',
+            Config.EMBEDDER_CACHE_MAX_SIZE,
+        )
 
     # cross-encoder reuses LLM for reranking; search defaults to RRF and does not strictly depend on it
     cross_encoder = OpenAIRerankerClient(config=llm_config, client=llm_sdk_client)
