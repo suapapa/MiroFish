@@ -285,6 +285,7 @@ class SimulationConfigGenerator:
         # Calculate the total number of steps
         num_batches = math.ceil(len(entities) / self.AGENTS_PER_BATCH)
         # Time configuration + event configuration + N batches of Agents + platform configuration
+        total_steps = 3 + num_batches
         current_step = 0
 
         def report_progress(step: int, message: str):
