@@ -31,6 +31,7 @@ from pydantic import BaseModel, Field, create_model
 
 from ..config import Config
 from .logger import get_logger
+from .openai_client_factory import build_async_openai_client
 
 logger = get_logger('mirofish.graphiti_adapter')
 
@@ -382,6 +383,14 @@ def _create_graphiti():
         model=graphiti_model,
         small_model=graphiti_model,
     )
+    llm_sdk_client = build_async_openai_client(
+        api_key=Config.LLM_API_KEY,
+        base_url=Config.LLM_BASE_URL,
+    )
+    embedder_sdk_client = build_async_openai_client(
+        api_key=Config.EMBEDDER_API_KEY,
+        base_url=Config.EMBEDDER_BASE_URL,
+    )
 
     # Choose LLM client:
     # OpenAIClient relies on OpenAI's proprietary Responses API (responses.parse); third-party
@@ -393,7 +402,7 @@ def _create_graphiti():
     # explicitly does not support json_schema (via env var).
     if Config.GRAPHITI_LLM_CLIENT == 'openai':
         from graphiti_core.llm_client.openai_client import OpenAIClient
-        llm_client = OpenAIClient(config=llm_config)
+        llm_client = OpenAIClient(config=llm_config, client=llm_sdk_client)
     else:
         from graphiti_core.llm_client.openai_generic_client import OpenAIGenericClient
         if Config.LLM_STRUCTURED_OUTPUT_MODE == 'json_object':
@@ -404,6 +413,7 @@ def _create_graphiti():
             )
         llm_client = OpenAIGenericClient(
             config=llm_config,
+            client=llm_sdk_client,
             structured_output_mode=Config.LLM_STRUCTURED_OUTPUT_MODE,
         )
 
@@ -413,11 +423,12 @@ def _create_graphiti():
             base_url=Config.EMBEDDER_BASE_URL,
             embedding_model=Config.EMBEDDER_MODEL_NAME,
             embedding_dim=Config.EMBEDDER_DIM,
-        )
+        ),
+        client=embedder_sdk_client,
     )
 
     # cross-encoder reuses LLM for reranking; search defaults to RRF and does not strictly depend on it
-    cross_encoder = OpenAIRerankerClient(config=llm_config)
+    cross_encoder = OpenAIRerankerClient(config=llm_config, client=llm_sdk_client)
 
     graphiti = Graphiti(
         graph_driver=driver,

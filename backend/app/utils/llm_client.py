@@ -6,9 +6,9 @@ Unified OpenAI-format API calls
 import json
 import re
 from typing import Optional, Dict, Any, List
-from openai import OpenAI
 
 from ..config import Config
+from .openai_client_factory import build_openai_client
 
 
 class LLMClient:
@@ -27,9 +27,9 @@ class LLMClient:
         if not self.api_key:
             raise ValueError("LLM_API_KEY is not configured")
         
-        self.client = OpenAI(
+        self.client = build_openai_client(
             api_key=self.api_key,
-            base_url=self.base_url
+            base_url=self.base_url,
         )
     
     def chat(

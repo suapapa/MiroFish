@@ -121,6 +121,13 @@ cp .env.example .env
 LLM_API_KEY=your_api_key
 LLM_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 LLM_MODEL_NAME=qwen-plus
+# Optional HTTP tuning for OpenAI-compatible providers / proxies.
+# `auto` (default) disables keep-alive reuse for non-OpenAI endpoints and helps
+# avoid intermittent 502/provider_connection_failed errors from stale pooled connections.
+# LLM_CONNECTION_CLOSE=auto
+# LLM_MAX_RETRIES=5
+# LLM_REQUEST_TIMEOUT_SECONDS=600
+# LLM_CONNECT_TIMEOUT_SECONDS=10
 # Optional: dedicated model for Graphiti graph build (defaults to LLM_MODEL_NAME)
 # GRAPHITI_LLM_MODEL_NAME=qwen-turbo
 

@@ -15,12 +15,12 @@ from typing import Dict, Any, List, Optional
 from dataclasses import dataclass, field
 from datetime import datetime
 
-from openai import OpenAI
 from ..utils.graphiti_adapter import GraphitiClient as Zep
 
 from ..config import Config
 from ..utils.logger import get_logger
 from ..utils.locale import get_language_instruction, get_locale, set_locale, t
+from ..utils.openai_client_factory import build_openai_client
 from ..utils.prompts import get_prompt
 from .zep_entity_reader import EntityNode, ZepEntityReader
 
@@ -194,9 +194,9 @@ class OasisProfileGenerator:
         if not self.api_key:
             raise ValueError("LLM_API_KEY is not configured")
         
-        self.client = OpenAI(
+        self.client = build_openai_client(
             api_key=self.api_key,
-            base_url=self.base_url
+            base_url=self.base_url,
         )
         
         # Graph client for retrieving rich context (self-hosted Graphiti/FalkorDB)

@@ -41,6 +41,18 @@ class Config:
     LLM_API_KEY = os.environ.get('LLM_API_KEY')
     LLM_BASE_URL = os.environ.get('LLM_BASE_URL', 'https://api.openai.com/v1')
     LLM_MODEL_NAME = os.environ.get('LLM_MODEL_NAME', 'gpt-4o-mini')
+    # HTTP behavior for OpenAI-compatible providers.
+    #   - auto (default): keep normal pooling for api.openai.com, send Connection: close
+    #     and disable keep-alive reuse for third-party compatible endpoints.
+    #   - true/always: always disable keep-alive reuse.
+    #   - false/never: keep normal pooling for all providers.
+    LLM_CONNECTION_CLOSE = os.environ.get('LLM_CONNECTION_CLOSE', 'auto')
+    # SDK/network resiliency tuning shared by sync + async OpenAI clients.
+    LLM_MAX_RETRIES = int(os.environ.get('LLM_MAX_RETRIES', '5'))
+    LLM_REQUEST_TIMEOUT_SECONDS = float(os.environ.get('LLM_REQUEST_TIMEOUT_SECONDS', '600'))
+    LLM_CONNECT_TIMEOUT_SECONDS = float(os.environ.get('LLM_CONNECT_TIMEOUT_SECONDS', '10'))
+    LLM_MAX_CONNECTIONS = int(os.environ.get('LLM_MAX_CONNECTIONS', '20'))
+    LLM_MAX_KEEPALIVE_CONNECTIONS = int(os.environ.get('LLM_MAX_KEEPALIVE_CONNECTIONS', '20'))
     # Graphiti knowledge-graph LLM (extraction, dedup, timestamps, etc.; falls back to LLM_MODEL_NAME)
     GRAPHITI_LLM_MODEL_NAME = os.environ.get('GRAPHITI_LLM_MODEL_NAME', '') or LLM_MODEL_NAME
 

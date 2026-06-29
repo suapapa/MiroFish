@@ -121,6 +121,13 @@ cp .env.example .env
 LLM_API_KEY=your_api_key
 LLM_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 LLM_MODEL_NAME=qwen-plus
+# 可选：OpenAI 兼容服务 / 代理的 HTTP 调优。
+# `auto`（默认）会对非 OpenAI 官方端点禁用 keep-alive 复用，
+# 用于缓解陈旧连接导致的间歇性 502/provider_connection_failed。
+# LLM_CONNECTION_CLOSE=auto
+# LLM_MAX_RETRIES=5
+# LLM_REQUEST_TIMEOUT_SECONDS=600
+# LLM_CONNECT_TIMEOUT_SECONDS=10
 
 # Zep Cloud 配置
 # 每月免费额度即可支撑简单使用：https://app.getzep.com/
