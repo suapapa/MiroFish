@@ -18,6 +18,8 @@ from flask import Response, jsonify, request, url_for
 OPENAPI_VERSION = "3.0.3"
 DOCS_ROUTE = "/docs"
 OPENAPI_JSON_ROUTE = f"{DOCS_ROUTE}/openapi.json"
+API_DOCS_ROUTE = "/api/docs"
+API_OPENAPI_JSON_ROUTE = f"{API_DOCS_ROUTE}/openapi.json"
 
 _FLASK_PARAM_RE = re.compile(r"<(?:(?P<converter>[^:<>]+):)?(?P<name>[^<>]+)>")
 
@@ -25,11 +27,13 @@ _FLASK_PARAM_RE = re.compile(r"<(?:(?P<converter>[^:<>]+):)?(?P<name>[^<>]+)>")
 def register_openapi_docs(app) -> None:
     """Register the OpenAPI JSON and Swagger UI endpoints."""
 
+    @app.get(API_DOCS_ROUTE, strict_slashes=False)
     @app.get(DOCS_ROUTE, strict_slashes=False)
     def openapi_docs_ui():
-        spec_url = url_for("openapi_json")
+        spec_url = _openapi_json_url_for_request()
         return Response(_swagger_ui_html(spec_url), mimetype="text/html")
 
+    @app.get(API_OPENAPI_JSON_ROUTE)
     @app.get(OPENAPI_JSON_ROUTE)
     def openapi_json():
         return jsonify(build_openapi_spec(app))
@@ -62,8 +66,16 @@ def _should_skip_rule(rule) -> bool:
     return (
         rule.endpoint == "static"
         or rule.rule.startswith(DOCS_ROUTE)
+        or rule.rule.startswith(API_DOCS_ROUTE)
         or rule.endpoint.startswith("openapi_")
     )
+
+
+def _openapi_json_url_for_request() -> str:
+    """Return a spec URL that is reachable through the same public prefix."""
+    if request.path.rstrip("/").startswith(API_DOCS_ROUTE):
+        return API_OPENAPI_JSON_ROUTE
+    return url_for("openapi_json")
 
 
 def _build_operation(rule, method: str, endpoint_doc: dict[str, Any]) -> dict[str, Any]:
