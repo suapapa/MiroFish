@@ -596,7 +596,7 @@ class SimulationConfigGenerator:
             return self._get_default_time_config(num_entities)
 
     def _get_default_time_config(self, num_entities: int) -> Dict[str, Any]:
-        """Get the default time configuration (Chinese schedule)"""
+        """Get the default time configuration (default daily activity pattern)"""
         return {
             "total_simulation_hours": 72,
             # Each round is 1 hour, speeding up the flow of time
@@ -606,7 +606,7 @@ class SimulationConfigGenerator:
             "off_peak_hours": [0, 1, 2, 3, 4, 5],
             "morning_hours": [6, 7, 8],
             "work_hours": [9, 10, 11, 12, 13, 14, 15, 16, 17, 18],
-            "reasoning": "Using the default China-based daily schedule configuration (1 hour per round).",
+            "reasoning": "Using the default daily activity pattern configuration (1 hour per round).",
         }
 
     def _parse_time_config(
@@ -875,7 +875,7 @@ class SimulationConfigGenerator:
         return configs
 
     def _generate_agent_config_by_rule(self, entity: EntityNode) -> Dict[str, Any]:
-        """Generate a single Agent configuration based on rules (Chinese schedule)"""
+        """Generate a single Agent configuration based on rules (default daily activity pattern)"""
         entity_type = (entity.get_entity_type() or "Unknown").lower()
 
         if entity_type in ["university", "governmentagency", "ngo"]:
