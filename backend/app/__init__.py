@@ -84,7 +84,12 @@ def create_app(config_class=Config):
     # Health check
     @app.route('/health')
     def health():
+        """Return backend health status."""
         return {'status': 'ok', 'service': 'MiroFish Backend'}
+
+    # OpenAPI documentation
+    from .openapi import register_openapi_docs
+    register_openapi_docs(app)
     
     if should_log_startup:
         logger.info("MiroFish Backend startup complete")
