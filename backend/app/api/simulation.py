@@ -793,6 +793,83 @@ def get_prepare_status():
         }), 500
 
 
+@simulation_bp.route('/<simulation_id>/prepare/stream', methods=['GET'])
+def stream_prepare_status(simulation_id: str):
+    """Stream preparation task progress via SSE"""
+    from ..utils.sse import sse_stream
+    from ..models.task import TaskManager
+    
+    def fetch():
+        manager = SimulationManager()
+        
+        # Check if already prepared
+        is_prepared, prepare_info = _check_simulation_prepared(simulation_id)
+        if is_prepared:
+            return {
+                'simulation_id': simulation_id,
+                'status': 'ready',
+                'progress': 100,
+                'message': t('api.alreadyPrepared'),
+                'already_prepared': True,
+                'prepare_info': prepare_info
+            }
+        
+        # Find active task
+        state = manager.get_simulation(simulation_id)
+        task_id = state.prepare_task_id if state else None
+        
+        if not task_id:
+            active_task = _find_active_prepare_task(
+                simulation_id,
+                state.prepare_task_id if state else None,
+            )
+            if active_task:
+                task_id = active_task.task_id
+        
+        if not task_id:
+            if state and state.status == SimulationStatus.PREPARING:
+                return {
+                    'simulation_id': simulation_id,
+                    'status': 'preparing',
+                    'progress': 0,
+                    'message': t('api.prepareInProgress'),
+                    'already_prepared': False,
+                }
+            return {
+                'simulation_id': simulation_id,
+                'status': 'not_started',
+                'progress': 0,
+                'message': t('api.notStartedPrepare'),
+                'already_prepared': False
+            }
+        
+        task_manager = TaskManager()
+        task = task_manager.get_task(task_id)
+        
+        if not task:
+            is_prepared, prepare_info = _check_simulation_prepared(simulation_id)
+            if is_prepared:
+                return {
+                    'simulation_id': simulation_id,
+                    'task_id': task_id,
+                    'status': 'ready',
+                    'progress': 100,
+                    'already_prepared': True,
+                    'prepare_info': prepare_info
+                }
+            return None
+        
+        task_dict = task.to_dict()
+        task_dict['already_prepared'] = False
+        return task_dict
+    
+    def is_done(data):
+        status = data.get('status', '')
+        return status in ('completed', 'ready', 'failed') or data.get('already_prepared')
+    
+    return sse_stream(fetch, stop_condition=is_done, interval=2)
+
+
 @simulation_bp.route('/<simulation_id>', methods=['GET'])
 def get_simulation(simulation_id: str):
     """Get simulation status"""
@@ -1296,6 +1373,80 @@ def get_simulation_profiles_realtime(simulation_id: str):
         }), 500
 
 
+@simulation_bp.route('/<simulation_id>/profiles/stream', methods=['GET'])
+def stream_simulation_profiles_realtime(simulation_id: str):
+    """Stream simulated Agent Profile in real time via SSE"""
+    from ..utils.sse import sse_stream
+    import json
+    import csv
+    from datetime import datetime
+    
+    platform = request.args.get('platform', 'reddit')
+    sim_dir = os.path.join(Config.OASIS_SIMULATION_DATA_DIR, simulation_id)
+    
+    def fetch():
+        if not os.path.exists(sim_dir):
+            raise StopIteration
+        
+        if platform == "reddit":
+            profiles_file = os.path.join(sim_dir, "reddit_profiles.json")
+        else:
+            profiles_file = os.path.join(sim_dir, "twitter_profiles.csv")
+        
+        file_exists = os.path.exists(profiles_file)
+        profiles = []
+        file_modified_at = None
+        
+        if file_exists:
+            file_stat = os.stat(profiles_file)
+            file_modified_at = datetime.fromtimestamp(file_stat.st_mtime).isoformat()
+            
+            try:
+                if platform == "reddit":
+                    with open(profiles_file, 'r', encoding='utf-8') as f:
+                        profiles = json.load(f)
+                else:
+                    with open(profiles_file, 'r', encoding='utf-8') as f:
+                        reader = csv.DictReader(f)
+                        profiles = list(reader)
+            except Exception:
+                return None
+        
+        is_generating = False
+        total_expected = None
+        
+        state_file = os.path.join(sim_dir, "state.json")
+        if os.path.exists(state_file):
+            try:
+                with open(state_file, 'r', encoding='utf-8') as f:
+                    state_data = json.load(f)
+                    status = state_data.get("status", "")
+                    is_generating = status == "preparing"
+                    total_expected = state_data.get("entities_count")
+            except Exception:
+                pass
+        
+        return {
+            "simulation_id": simulation_id,
+            "platform": platform,
+            "count": len(profiles),
+            "total_expected": total_expected,
+            "is_generating": is_generating,
+            "file_exists": file_exists,
+            "file_modified_at": file_modified_at,
+            "profiles": profiles
+        }
+        
+    def is_done(data):
+        if not data.get("is_generating"):
+            expected = data.get("total_expected")
+            if expected is not None and data.get("count") >= expected:
+                return True
+        return False
+        
+    return sse_stream(fetch, stop_condition=is_done, interval=3)
+
+
 @simulation_bp.route('/<simulation_id>/config/realtime', methods=['GET'])
 def get_simulation_config_realtime(simulation_id: str):
     """
@@ -1414,6 +1565,87 @@ def get_simulation_config_realtime(simulation_id: str):
             "error": str(e),
             "traceback": traceback.format_exc()
         }), 500
+
+
+@simulation_bp.route('/<simulation_id>/config/stream', methods=['GET'])
+def stream_simulation_config_realtime(simulation_id: str):
+    """Stream simulation configuration in real time via SSE"""
+    from ..utils.sse import sse_stream
+    import json
+    from datetime import datetime
+    
+    sim_dir = os.path.join(Config.OASIS_SIMULATION_DATA_DIR, simulation_id)
+    
+    def fetch():
+        if not os.path.exists(sim_dir):
+            raise StopIteration
+            
+        config_file = os.path.join(sim_dir, "simulation_config.json")
+        file_exists = os.path.exists(config_file)
+        config = None
+        file_modified_at = None
+        
+        if file_exists:
+            file_stat = os.stat(config_file)
+            file_modified_at = datetime.fromtimestamp(file_stat.st_mtime).isoformat()
+            
+            try:
+                with open(config_file, 'r', encoding='utf-8') as f:
+                    config = json.load(f)
+            except Exception:
+                return None
+                
+        is_generating = False
+        generation_stage = None
+        config_generated = False
+        
+        state_file = os.path.join(sim_dir, "state.json")
+        if os.path.exists(state_file):
+            try:
+                with open(state_file, 'r', encoding='utf-8') as f:
+                    state_data = json.load(f)
+                    status = state_data.get("status", "")
+                    is_generating = status == "preparing"
+                    config_generated = state_data.get("config_generated", False)
+                    
+                    if is_generating:
+                        if state_data.get("profiles_generated", False):
+                            generation_stage = "generating_config"
+                        else:
+                            generation_stage = "generating_profiles"
+                    elif status == "ready":
+                        generation_stage = "completed"
+            except Exception:
+                pass
+                
+        response_data = {
+            "simulation_id": simulation_id,
+            "file_exists": file_exists,
+            "file_modified_at": file_modified_at,
+            "is_generating": is_generating,
+            "generation_stage": generation_stage,
+            "config_generated": config_generated,
+            "config": config
+        }
+        
+        if config:
+            response_data["summary"] = {
+                "total_agents": len(config.get("agent_configs", [])),
+                "simulation_hours": config.get("time_config", {}).get("total_simulation_hours"),
+                "initial_posts_count": len(config.get("event_config", {}).get("initial_posts", [])),
+                "hot_topics_count": len(config.get("event_config", {}).get("hot_topics", [])),
+                "has_twitter_config": "twitter_config" in config,
+                "has_reddit_config": "reddit_config" in config,
+                "generated_at": config.get("generated_at"),
+                "llm_model": config.get("llm_model")
+            }
+            
+        return response_data
+        
+    def is_done(data):
+        return data.get("config_generated") is True
+        
+    return sse_stream(fetch, stop_condition=is_done, interval=2)
 
 
 @simulation_bp.route('/<simulation_id>/config', methods=['GET'])
@@ -1921,6 +2153,32 @@ def get_run_status(simulation_id: str):
         }), 500
 
 
+@simulation_bp.route('/<simulation_id>/run-status/stream', methods=['GET'])
+def stream_run_status(simulation_id: str):
+    """Stream simulation run status via SSE"""
+    from ..utils.sse import sse_stream
+    
+    def fetch():
+        run_state = SimulationRunner.get_run_state(simulation_id)
+        if not run_state:
+            return {
+                "simulation_id": simulation_id,
+                "runner_status": "idle",
+                "current_round": 0,
+                "total_rounds": 0,
+                "progress_percent": 0,
+                "twitter_actions_count": 0,
+                "reddit_actions_count": 0,
+                "total_actions_count": 0,
+            }
+        return run_state.to_dict()
+        
+    def is_done(data):
+        return data.get("runner_status") in ("completed", "stopped")
+        
+    return sse_stream(fetch, stop_condition=is_done, interval=2)
+
+
 @simulation_bp.route('/<simulation_id>/run-status/detail', methods=['GET'])
 def get_run_status_detail(simulation_id: str):
     """
@@ -2020,6 +2278,65 @@ def get_run_status_detail(simulation_id: str):
             "error": str(e),
             "traceback": traceback.format_exc()
         }), 500
+
+
+@simulation_bp.route('/<simulation_id>/run-status/detail/stream', methods=['GET'])
+def stream_run_status_detail(simulation_id: str):
+    """Stream detailed simulation run status via SSE"""
+    from ..utils.sse import sse_stream
+    
+    platform_filter = request.args.get('platform')
+    
+    def fetch():
+        run_state = SimulationRunner.get_run_state(simulation_id)
+        if not run_state:
+            return {
+                "simulation_id": simulation_id,
+                "runner_status": "idle",
+                "all_actions": [],
+                "twitter_actions": [],
+                "reddit_actions": []
+            }
+        
+        # Get the full list of actions
+        all_actions = SimulationRunner.get_all_actions(
+            simulation_id=simulation_id,
+            platform=platform_filter
+        )
+        
+        # Get actions by platform
+        twitter_actions = SimulationRunner.get_all_actions(
+            simulation_id=simulation_id,
+            platform="twitter"
+        ) if not platform_filter or platform_filter == "twitter" else []
+        
+        reddit_actions = SimulationRunner.get_all_actions(
+            simulation_id=simulation_id,
+            platform="reddit"
+        ) if not platform_filter or platform_filter == "reddit" else []
+        
+        # Get the actions of the current round
+        current_round = run_state.current_round
+        recent_actions = SimulationRunner.get_all_actions(
+            simulation_id=simulation_id,
+            platform=platform_filter,
+            round_num=current_round
+        ) if current_round > 0 else []
+        
+        # Get basic status information
+        result = run_state.to_dict()
+        result["all_actions"] = [a.to_dict() for a in all_actions]
+        result["twitter_actions"] = [a.to_dict() for a in twitter_actions]
+        result["reddit_actions"] = [a.to_dict() for a in reddit_actions]
+        result["rounds_count"] = len(run_state.rounds)
+        result["recent_actions"] = [a.to_dict() for a in recent_actions]
+        
+        return result
+        
+    def is_done(data):
+        return data.get("runner_status") in ("completed", "stopped")
+        
+    return sse_stream(fetch, stop_condition=is_done, interval=3)
 
 
 @simulation_bp.route('/<simulation_id>/actions', methods=['GET'])

@@ -394,6 +394,7 @@ import { ref, computed, watch, onMounted, onUnmounted, nextTick, h, reactive } f
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { getAgentLog, getConsoleLog } from '../api/report'
+import { createSSE } from '../api/sse'
 
 const router = useRouter()
 const { t } = useI18n()
@@ -2017,70 +2018,70 @@ const getLogLevelClass = (log) => {
   return ''
 }
 
-// Polling
-let agentLogTimer = null
-let consoleLogTimer = null
+// SSE connections
+let agentLogSSE = null
+let consoleLogSSE = null
 
-const fetchAgentLog = async () => {
-  if (!props.reportId) return
+const handleAgentLogUpdate = (data) => {
+  const newLogs = data.logs || []
   
-  try {
-    const res = await getAgentLog(props.reportId, agentLogLine.value)
-    
-    if (res.success && res.data) {
-      const newLogs = res.data.logs || []
+  if (newLogs.length > 0) {
+    newLogs.forEach(log => {
+      agentLogs.value.push(log)
       
-      if (newLogs.length > 0) {
-        newLogs.forEach(log => {
-          agentLogs.value.push(log)
-          
-          if (log.action === 'planning_complete' && log.details?.outline) {
-            reportOutline.value = log.details.outline
-          }
-          
-          if (log.action === 'section_start') {
-            currentSectionIndex.value = log.section_index
-          }
-
-          // section_complete - section generation finished
-          if (log.action === 'section_complete') {
-            if (log.details?.content) {
-              generatedSections.value[log.section_index] = log.details.content
-              // Auto-expand newly generated section
-              expandedContent.value.add(log.section_index - 1)
-              currentSectionIndex.value = null
-            }
-          }
-          
-          if (log.action === 'report_complete') {
-            isComplete.value = true
-            currentSectionIndex.value = null  // Ensure loading state cleared
-            emit('update-status', 'completed')
-            stopPolling()
-            // Scroll handled in nextTick after loop
-          }
-          
-          if (log.action === 'report_start') {
-            startTime.value = new Date(log.timestamp)
-          }
-        })
-        
-        agentLogLine.value = res.data.from_line + newLogs.length
-        
-        nextTick(() => {
-          if (rightPanel.value) {
-            // Scroll top if done; else bottom to follow latest logs
-            if (isComplete.value) {
-              rightPanel.value.scrollTop = 0
-            } else {
-              rightPanel.value.scrollTop = rightPanel.value.scrollHeight
-            }
-          }
-        })
+      // Process outline/section update
+      if (log.action === 'planning_complete' && log.details?.outline) {
+        reportOutline.value = log.details.outline
       }
-    }
-  } catch (err) {
-    console.warn('Failed to fetch agent log:', err)
+      
+      if (log.action === 'section_start' && log.section_index !== undefined) {
+        currentSectionIndex.value = log.section_index - 1
+        // Expand newly started section
+        expandedContent.value.add(log.section_index - 1)
+      }
+      
+      if (log.action === 'section_complete' && log.section_index !== undefined && log.details?.section_content) {
+        // Keep sections reactive; do not mutate in place
+        generatedSections.value = {
+          ...generatedSections.value,
+          [log.section_index - 1]: log.details.section_content
+        }
+        
+        // Auto expand when complete
+        expandedContent.value.add(log.section_index - 1)
+        
+        // If the completed section is the current loading one, clear currentSectionIndex
+        if (currentSectionIndex.value === log.section_index - 1) {
+          expandedContent.value.add(log.section_index - 1)
+          currentSectionIndex.value = null
+        }
+      }
+      
+      if (log.action === 'report_complete') {
+        isComplete.value = true
+        currentSectionIndex.value = null  // Ensure loading state cleared
+        emit('update-status', 'completed')
+        stopPolling()
+        // Scroll handled in nextTick after loop
+      }
+      
+      if (log.action === 'report_start') {
+        startTime.value = new Date(log.timestamp)
+      }
+    })
+    
+    agentLogLine.value = data.from_line + newLogs.length
+    
+    nextTick(() => {
+      if (rightPanel.value) {
+        // Scroll top if done; else bottom to follow latest logs
+        if (isComplete.value) {
+          rightPanel.value.scrollTop = 0
+        } else {
+          rightPanel.value.scrollTop = rightPanel.value.scrollHeight
+        }
+      }
+    })
   }
 }
 
@@ -2129,49 +2130,57 @@ const extractFinalContent = (response) => {
   return null
 }
 
-const fetchConsoleLog = async () => {
-  if (!props.reportId) return
+const handleConsoleLogUpdate = (data) => {
+  const newLogs = data.logs || []
   
-  try {
-    const res = await getConsoleLog(props.reportId, consoleLogLine.value)
+  if (newLogs.length > 0) {
+    consoleLogs.value.push(...newLogs)
+    consoleLogLine.value = data.from_line + newLogs.length
     
-    if (res.success && res.data) {
-      const newLogs = res.data.logs || []
-      
-      if (newLogs.length > 0) {
-        consoleLogs.value.push(...newLogs)
-        consoleLogLine.value = res.data.from_line + newLogs.length
-        
-        nextTick(() => {
-          if (logContent.value) {
-            logContent.value.scrollTop = logContent.value.scrollHeight
-          }
-        })
+    nextTick(() => {
+      if (logContent.value) {
+        logContent.value.scrollTop = logContent.value.scrollHeight
       }
-    }
-  } catch (err) {
-    console.warn('Failed to fetch console log:', err)
+    })
   }
 }
 
 const startPolling = () => {
-  if (agentLogTimer || consoleLogTimer) return
+  if (agentLogSSE || consoleLogSSE) return
   
-  fetchAgentLog()
-  fetchConsoleLog()
+  agentLogSSE = createSSE(`/api/report/${props.reportId}/agent-log/sse`, {
+    onUpdate: (data) => {
+      handleAgentLogUpdate(data)
+    },
+    onComplete: (data) => {
+      handleAgentLogUpdate(data)
+    },
+    onError: (err) => {
+      console.warn('Agent log SSE stream error:', err)
+    }
+  })
   
-  agentLogTimer = setInterval(fetchAgentLog, 2000)
-  consoleLogTimer = setInterval(fetchConsoleLog, 1500)
+  consoleLogSSE = createSSE(`/api/report/${props.reportId}/console-log/sse`, {
+    onUpdate: (data) => {
+      handleConsoleLogUpdate(data)
+    },
+    onComplete: (data) => {
+      handleConsoleLogUpdate(data)
+    },
+    onError: (err) => {
+      console.warn('Console log SSE stream error:', err)
+    }
+  })
 }
 
 const stopPolling = () => {
-  if (agentLogTimer) {
-    clearInterval(agentLogTimer)
-    agentLogTimer = null
+  if (agentLogSSE) {
+    agentLogSSE.close()
+    agentLogSSE = null
   }
-  if (consoleLogTimer) {
-    clearInterval(consoleLogTimer)
-    consoleLogTimer = null
+  if (consoleLogSSE) {
+    consoleLogSSE.close()
+    consoleLogSSE = null
   }
 }
 

@@ -417,6 +417,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { generateOntology, getProject, buildGraph, getTaskStatus, getGraphData } from '../api/graph'
 import { getPendingUpload, clearPendingUpload } from '../store/pendingUpload'
 import * as d3 from 'd3'
+import { createSSE } from '../api/sse'
 
 const route = useRoute()
 const router = useRouter()
@@ -440,12 +441,10 @@ const isFullScreen = ref(false)
 const graphContainer = ref(null)
 const graphSvg = ref(null)
 
-// Polling timers
-let pollTimer = null
-let graphPollTimer = null
+// Polling SSE connections
+let pollSSE = null
+let graphSSE = null
 let currentGraphId = null
-let isTaskStatusRequestInFlight = false
-let isGraphDataRequestInFlight = false
 
 const syncProjectData = (project) => {
   projectData.value = project
@@ -735,17 +734,54 @@ const startBuildGraph = async () => {
 
 // Start graph data polling
 const startGraphPolling = () => {
-  if (graphPollTimer) {
-    clearInterval(graphPollTimer)
+  if (graphSSE) {
+    graphSSE.close()
   }
+  const graphId = currentGraphId || projectData.value?.graph_id
+  if (!graphId) return
 
-  // Fetch once immediately
-  void fetchGraphData()
+  console.log('Started streaming graph data...')
   
-  // Auto-fetch graph data every 10 seconds
-  graphPollTimer = setInterval(() => {
-    void fetchGraphData()
-  }, 10000)
+  graphSSE = createSSE(`/api/graph/data/${graphId}/stream?refresh=${currentPhase.value === 1}`, {
+    onUpdate: (data) => {
+      handleGraphDataUpdate(data)
+    },
+    onComplete: (data) => {
+      handleGraphDataUpdate(data)
+    },
+    onError: (err) => {
+      console.warn('Graph data SSE stream error:', err)
+    }
+  })
+}
+
+const handleGraphDataUpdate = async (data) => {
+  const newData = data
+  const newNodeCount = newData.node_count || newData.nodes?.length || 0
+  const oldNodeCount = graphData.value?.node_count || graphData.value?.nodes?.length || 0
+  
+  console.log('Fetching graph data, nodes:', newNodeCount, 'edges:', newData.edge_count || newData.edges?.length || 0)
+
+  if (currentPhase.value === 1 && oldNodeCount > 0 && newNodeCount === 0) {
+    console.log('Skipping transient empty graph snapshot during build')
+    return
+  }
+  
+  // Re-render when data changes
+  if (newNodeCount !== oldNodeCount || !graphData.value) {
+    graphData.value = newData
+    await nextTick()
+    renderGraph()
+  } else if (newNodeCount > 0) {
+    // Edge count may increase even when node count stays the same
+    const newEdgeCount = newData.edge_count || newData.edges?.length || 0
+    const oldEdgeCount = graphData.value?.edge_count || graphData.value?.edges?.length || 0
+    if (newEdgeCount !== oldEdgeCount) {
+      graphData.value = newData
+      await nextTick()
+      renderGraph()
+    }
+  }
 }
 
 // Manually refresh graph
@@ -755,165 +791,103 @@ const refreshGraph = async () => {
   if (graphId) {
     await loadGraph(graphId, { refresh: true })
   } else {
-    await fetchGraphData()
+    await loadGraph(graphId)
   }
   graphLoading.value = false
 }
 
 // Stop graph data polling
 const stopGraphPolling = () => {
-  if (graphPollTimer) {
-    clearInterval(graphPollTimer)
-    graphPollTimer = null
-  }
-}
-
-// Fetch graph data
-const fetchGraphData = async () => {
-  if (isGraphDataRequestInFlight) {
-    return
-  }
-
-  const graphId = currentGraphId || projectData.value?.graph_id
-  if (!graphId) {
-    return
-  }
-
-  isGraphDataRequestInFlight = true
-  try {
-    const graphResponse = await getGraphData(graphId, { refresh: currentPhase.value === 1 })
-    
-    if (graphResponse.success && graphResponse.data) {
-      const newData = graphResponse.data
-      const newNodeCount = newData.node_count || newData.nodes?.length || 0
-      const oldNodeCount = graphData.value?.node_count || graphData.value?.nodes?.length || 0
-      
-      console.log('Fetching graph data, nodes:', newNodeCount, 'edges:', newData.edge_count || newData.edges?.length || 0)
-
-      if (currentPhase.value === 1 && oldNodeCount > 0 && newNodeCount === 0) {
-        console.log('Skipping transient empty graph snapshot during build')
-        return
-      }
-      
-      // Re-render when data changes
-      if (newNodeCount !== oldNodeCount || !graphData.value) {
-        graphData.value = newData
-        await nextTick()
-        renderGraph()
-      } else if (newNodeCount > 0) {
-        // Edge count may increase even when node count stays the same
-        const newEdgeCount = newData.edge_count || newData.edges?.length || 0
-        const oldEdgeCount = graphData.value?.edge_count || graphData.value?.edges?.length || 0
-        if (newEdgeCount !== oldEdgeCount) {
-          graphData.value = newData
-          await nextTick()
-          renderGraph()
-        }
-      }
-    }
-  } catch (err) {
-    console.log('Graph data fetch:', err.message || 'not ready')
-  } finally {
-    isGraphDataRequestInFlight = false
+  if (graphSSE) {
+    graphSSE.close()
+    graphSSE = null
   }
 }
 
 // Poll task status
 const startPollingTask = (taskId) => {
-  if (pollTimer) {
-    clearInterval(pollTimer)
+  if (pollSSE) {
+    pollSSE.close()
   }
 
-  // Run query once immediately
-  void pollTaskStatus(taskId)
-  
-  // Then poll on interval
-  pollTimer = setInterval(() => {
-    void pollTaskStatus(taskId)
-  }, 2000)
+  pollSSE = createSSE(`/api/graph/task/${taskId}/stream`, {
+    onUpdate: (data) => {
+      void handleTaskStatusUpdate(taskId, data)
+    },
+    onComplete: (data) => {
+      void handleTaskStatusUpdate(taskId, data)
+    },
+    onError: (err) => {
+      console.warn('Task SSE stream error:', err)
+    }
+  })
 }
 
 // Query task status
-const pollTaskStatus = async (taskId) => {
-  if (isTaskStatusRequestInFlight) {
-    return
+const handleTaskStatusUpdate = async (taskId, task) => {
+  syncGraphId(task.result?.graph_id || task.metadata?.graph_id)
+  
+  // Update progress display
+  buildProgress.value = {
+    progress: task.progress || 0,
+    message: task.message || '处理中...'
   }
-
-  isTaskStatusRequestInFlight = true
-  try {
-    const response = await getTaskStatus(taskId)
+  
+  console.log('Task status:', task.status, 'Progress:', task.progress)
+  
+  if (task.status === 'completed') {
+    console.log('✅ 图谱构建完成，正在加载完整 data...')
     
-    if (response.success) {
-      const task = response.data
-      syncGraphId(task.result?.graph_id || task.metadata?.graph_id)
-      
-      // Update progress display
-      buildProgress.value = {
-        progress: task.progress || 0,
-        message: task.message || '处理中...'
-      }
-      
-      console.log('Task status:', task.status, 'Progress:', task.progress)
-      
-      if (task.status === 'completed') {
-        console.log('✅ 图谱构建完成，正在加载完整数据...')
-        
-        stopPolling()
-        stopGraphPolling()
-        currentPhase.value = 2
-        
-        // Update progress to completed state
-        buildProgress.value = {
-          progress: 100,
-          message: '构建完成，正在加载图谱...'
-        }
-        
-        const completedGraphId = task.result?.graph_id || currentGraphId || projectData.value?.graph_id
+    stopPolling()
+    stopGraphPolling()
+    currentPhase.value = 2
+    
+    // Update progress to completed state
+    buildProgress.value = {
+      progress: 100,
+      message: '构建完成，正在加载图谱...'
+    }
+    
+    const completedGraphId = task.result?.graph_id || currentGraphId || projectData.value?.graph_id
 
-        if (projectData.value) {
-          projectData.value = {
-            ...projectData.value,
-            status: 'graph_completed',
-            graph_id: completedGraphId || projectData.value.graph_id,
-            graph_build_task_id: taskId
-          }
-        }
-
-        if (completedGraphId) {
-          console.log('📊 加载完整图谱:', completedGraphId)
-          await loadGraph(completedGraphId)
-          console.log('✅ 图谱加载完成')
-        } else {
-          const projectResponse = await getProject(currentProjectId.value)
-          if (projectResponse.success && projectResponse.data.graph_id) {
-            syncProjectData(projectResponse.data)
-            
-            console.log('📊 加载完整图谱:', projectResponse.data.graph_id)
-            await loadGraph(projectResponse.data.graph_id)
-            console.log('✅ 图谱加载完成')
-          }
-        }
-        
-        // Clear progress display
-        buildProgress.value = null
-      } else if (task.status === 'failed') {
-        stopPolling()
-        stopGraphPolling()
-        error.value = '图谱构建失败: ' + (task.error || '未知错误')
-        buildProgress.value = null
+    if (projectData.value) {
+      projectData.value = {
+        ...projectData.value,
+        status: 'graph_completed',
+        graph_id: completedGraphId || projectData.value.graph_id,
+        graph_build_task_id: taskId
       }
     }
-  } catch (err) {
-    console.error('Poll task error:', err)
-  } finally {
-    isTaskStatusRequestInFlight = false
+
+    if (completedGraphId) {
+      console.log('📊 加载完整图谱:', completedGraphId)
+      await loadGraph(completedGraphId)
+      console.log('✅ 图谱加载完成')
+    } else {
+      const projectResponse = await getProject(currentProjectId.value)
+      if (projectResponse.success && projectResponse.data.graph_id) {
+        syncProjectData(projectResponse.data)
+        
+        console.log('📊 加载完整图谱:', projectResponse.data.graph_id)
+        await loadGraph(projectResponse.data.graph_id)
+        console.log('✅ 图谱加载完成')
+      }
+    }
+    
+    // Clear progress display
+    buildProgress.value = null
+  } else if (task.status === 'failed') {
+    stopPolling()
+    stopGraphPolling()
+    error.value = '图谱构建失败: ' + (task.error || '未知错误')
+    buildProgress.value = null
   }
 }
 
 const stopPolling = () => {
-  if (pollTimer) {
-    clearInterval(pollTimer)
-    pollTimer = null
+  if (pollSSE) {
+    pollSSE.close()
+    pollSSE = null
   }
 }
 

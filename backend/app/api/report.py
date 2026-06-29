@@ -272,6 +272,44 @@ def get_generate_status():
         }), 500
 
 
+@report_bp.route('/generate/status/stream', methods=['GET'])
+def stream_generate_status():
+    """Stream report generation task progress via SSE"""
+    from ..utils.sse import sse_stream
+    
+    task_id = request.args.get('task_id')
+    simulation_id = request.args.get('simulation_id')
+    
+    def fetch():
+        if simulation_id:
+            existing_report = ReportManager.get_report_by_simulation(simulation_id)
+            if existing_report and existing_report.status == ReportStatus.COMPLETED:
+                return {
+                    "simulation_id": simulation_id,
+                    "report_id": existing_report.report_id,
+                    "status": "completed",
+                    "progress": 100,
+                    "message": t('api.reportGenerated'),
+                    "already_completed": True
+                }
+        
+        if not task_id:
+            raise StopIteration
+            
+        task_manager = TaskManager()
+        task = task_manager.get_task(task_id)
+        if not task:
+            raise StopIteration
+            
+        return task.to_dict()
+        
+    def is_done(data):
+        status = data.get('status')
+        return status in ('completed', 'failed') or data.get('already_completed')
+        
+    return sse_stream(fetch, stop_condition=is_done, interval=2)
+
+
 # ============== Report acquisition interface ==============
 
 @report_bp.route('/<report_id>', methods=['GET'])
@@ -848,6 +886,22 @@ def stream_agent_log(report_id: str):
         }), 500
 
 
+@report_bp.route('/<report_id>/agent-log/sse', methods=['GET'])
+def sse_agent_log(report_id: str):
+    """Stream agent log updates via SSE (incremental)"""
+    from ..utils.sse import sse_incremental_stream
+    
+    def fetch(cursor):
+        log_data = ReportManager.get_agent_log(report_id, from_line=cursor)
+        logs = log_data.get('logs', [])
+        if logs:
+            new_cursor = log_data.get('from_line', cursor) + len(logs)
+            return log_data, new_cursor, True
+        return None, cursor, False
+    
+    return sse_incremental_stream(fetch, interval=2)
+
+
 # ============== Console log interface ==============
 
 @report_bp.route('/<report_id>/console-log', methods=['GET'])
@@ -928,6 +982,22 @@ def stream_console_log(report_id: str):
             "error": str(e),
             "traceback": traceback.format_exc()
         }), 500
+
+
+@report_bp.route('/<report_id>/console-log/sse', methods=['GET'])
+def sse_console_log(report_id: str):
+    """Stream console log updates via SSE (incremental)"""
+    from ..utils.sse import sse_incremental_stream
+    
+    def fetch(cursor):
+        log_data = ReportManager.get_console_log(report_id, from_line=cursor)
+        logs = log_data.get('logs', [])
+        if logs:
+            new_cursor = log_data.get('from_line', cursor) + len(logs)
+            return log_data, new_cursor, True
+        return None, cursor, False
+    
+    return sse_incremental_stream(fetch, interval=1.5)
 
 
 # ============== Tool calling interface (for debugging) ==============
