@@ -121,6 +121,9 @@ cp .env.example .env
 LLM_API_KEY=your_api_key
 LLM_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 LLM_MODEL_NAME=qwen-plus
+# Optional: per-process request concurrency caps. Lower these when the provider
+# slows down under burst traffic.
+# LLM_MAX_CONCURRENT_REQUESTS=2
 # Optional HTTP tuning for OpenAI-compatible providers / proxies.
 # `auto` (default) disables keep-alive reuse for non-OpenAI endpoints and helps
 # avoid intermittent 502/provider_connection_failed errors from stale pooled connections.
@@ -130,6 +133,8 @@ LLM_MODEL_NAME=qwen-plus
 # LLM_CONNECT_TIMEOUT_SECONDS=10
 # Optional: dedicated model for Graphiti graph build (defaults to LLM_MODEL_NAME)
 # GRAPHITI_LLM_MODEL_NAME=qwen-turbo
+# Optional: Graphiti extraction/rerank concurrency cap
+# GRAPHITI_LLM_MAX_CONCURRENT_REQUESTS=2
 
 # Knowledge graph: Graphiti + FalkorDB (self-hosted, replaces Zep Cloud)
 # With docker-compose, FalkorDB starts automatically and the backend is wired to it.
@@ -142,6 +147,8 @@ GRAPH_DB_NAME=mirofish
 # Embeddings (Graphiti needs a vector embedder; defaults reuse the LLM creds).
 # EMBEDDER_DIM must match the model: OpenAI text-embedding-3-small=1536, Alibaba text-embedding-v3=1024
 EMBEDDER_MODEL_NAME=text-embedding-3-small
+# Optional: embedder request concurrency cap
+# EMBEDDER_MAX_CONCURRENT_REQUESTS=4
 EMBEDDER_DIM=1536
 ```
 

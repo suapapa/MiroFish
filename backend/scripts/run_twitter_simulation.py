@@ -80,6 +80,8 @@ class MaxTokensWarningFilter(logging.Filter):
 # Add the filter immediately when the module is loaded to ensure it takes effect before the camel code is executed
 logging.getLogger().addFilter(MaxTokensWarningFilter())
 
+from app.config import Config
+
 
 def setup_oasis_logging(log_dir: str):
     """Configure OASIS logs and use log files with fixed names"""
@@ -590,11 +592,13 @@ class TwitterSimulationRunner:
         
         # Create environment
         print("Creating OASIS environment...")
+        llm_request_limit = max(1, Config.LLM_MAX_CONCURRENT_REQUESTS)
+        print(f"LLM request concurrency limit: {llm_request_limit}")
         self.env = oasis.make(
             agent_graph=self.agent_graph,
             platform=oasis.DefaultPlatformType.TWITTER,
             database_path=db_path,
-            semaphore=30,
+            semaphore=llm_request_limit,
         )
         
         await self.env.reset()

@@ -116,6 +116,8 @@ class MaxTokensWarningFilter(logging.Filter):
 # Add the filter immediately when the module is loaded to ensure it takes effect before the camel code is executed
 logging.getLogger().addFilter(MaxTokensWarningFilter())
 
+from app.config import Config
+
 
 def disable_oasis_logging():
     """
@@ -1153,11 +1155,13 @@ async def run_twitter_simulation(
     if os.path.exists(db_path):
         os.remove(db_path)
     
+    llm_request_limit = max(1, Config.LLM_MAX_CONCURRENT_REQUESTS)
+    log_info(f"LLM request concurrency limit: {llm_request_limit}")
     result.env = oasis.make(
         agent_graph=result.agent_graph,
         platform=oasis.DefaultPlatformType.TWITTER,
         database_path=db_path,
-        semaphore=30,  # Limit the maximum number of concurrent LLM requests to prevent API overload
+        semaphore=llm_request_limit,
     )
     
     await result.env.reset()
@@ -1345,11 +1349,13 @@ async def run_reddit_simulation(
     if os.path.exists(db_path):
         os.remove(db_path)
     
+    llm_request_limit = max(1, Config.LLM_MAX_CONCURRENT_REQUESTS)
+    log_info(f"LLM request concurrency limit: {llm_request_limit}")
     result.env = oasis.make(
         agent_graph=result.agent_graph,
         platform=oasis.DefaultPlatformType.REDDIT,
         database_path=db_path,
-        semaphore=30,  # Limit the maximum number of concurrent LLM requests to prevent API overload
+        semaphore=llm_request_limit,
     )
     
     await result.env.reset()

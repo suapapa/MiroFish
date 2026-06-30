@@ -388,10 +388,12 @@ def _create_graphiti():
     llm_sdk_client = build_async_openai_client(
         api_key=Config.LLM_API_KEY,
         base_url=Config.LLM_BASE_URL,
+        client_kind='graphiti_llm',
     )
     embedder_sdk_client = build_async_openai_client(
         api_key=Config.EMBEDDER_API_KEY,
         base_url=Config.EMBEDDER_BASE_URL,
+        client_kind='embedder',
     )
 
     # Choose LLM client:

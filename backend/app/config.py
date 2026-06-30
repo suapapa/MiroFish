@@ -53,6 +53,15 @@ class Config:
     LLM_CONNECT_TIMEOUT_SECONDS = float(os.environ.get('LLM_CONNECT_TIMEOUT_SECONDS', '10'))
     LLM_MAX_CONNECTIONS = int(os.environ.get('LLM_MAX_CONNECTIONS', '20'))
     LLM_MAX_KEEPALIVE_CONNECTIONS = int(os.environ.get('LLM_MAX_KEEPALIVE_CONNECTIONS', '20'))
+    # Per-process request concurrency caps. Lower these when a provider/model slows down
+    # under bursty parallel traffic.
+    LLM_MAX_CONCURRENT_REQUESTS = int(os.environ.get('LLM_MAX_CONCURRENT_REQUESTS', '30'))
+    GRAPHITI_LLM_MAX_CONCURRENT_REQUESTS = int(
+        os.environ.get('GRAPHITI_LLM_MAX_CONCURRENT_REQUESTS', '20')
+    )
+    EMBEDDER_MAX_CONCURRENT_REQUESTS = int(
+        os.environ.get('EMBEDDER_MAX_CONCURRENT_REQUESTS', '20')
+    )
     # Graphiti knowledge-graph LLM (extraction, dedup, timestamps, etc.; falls back to LLM_MODEL_NAME)
     GRAPHITI_LLM_MODEL_NAME = os.environ.get('GRAPHITI_LLM_MODEL_NAME', '') or LLM_MODEL_NAME
 
