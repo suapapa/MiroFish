@@ -17,6 +17,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from queue import Queue
+from collections import deque
 
 from ..config import Config
 from ..utils.logger import get_logger
@@ -130,7 +131,7 @@ class SimulationRunState:
     rounds: List[RoundSummary] = field(default_factory=list)
     
     # Recent actions (for front-end real-time display)
-    recent_actions: List[AgentAction] = field(default_factory=list)
+    recent_actions: deque[AgentAction] = field(default_factory=lambda: deque(maxlen=50))
     max_recent_actions: int = 50
     
     # Timestamp
@@ -146,9 +147,7 @@ class SimulationRunState:
     
     def add_action(self, action: AgentAction):
         """Add action to recent actions list"""
-        self.recent_actions.insert(0, action)
-        if len(self.recent_actions) > self.max_recent_actions:
-            self.recent_actions = self.recent_actions[:self.max_recent_actions]
+        self.recent_actions.appendleft(action)
         
         if action.platform == "twitter":
             self.twitter_actions_count += 1

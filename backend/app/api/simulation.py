@@ -940,6 +940,55 @@ def _get_report_id_for_simulation(simulation_id: str) -> str:
         return None
 
 
+def _build_simulation_to_report_map() -> dict:
+    """
+        Build a mapping of simulation_id -> latest_report_id
+        by reading all meta.json files in the reports directory once.
+    """
+    import json
+    
+    reports_dir = os.path.join(os.path.dirname(__file__), '../../uploads/reports')
+    if not os.path.exists(reports_dir):
+        return {}
+        
+    sim_to_reports = {}
+    try:
+        for report_folder in os.listdir(reports_dir):
+            report_path = os.path.join(reports_dir, report_folder)
+            if not os.path.isdir(report_path):
+                continue
+                
+            meta_file = os.path.join(report_path, "meta.json")
+            if not os.path.exists(meta_file):
+                continue
+                
+            try:
+                with open(meta_file, 'r', encoding='utf-8') as f:
+                    meta = json.load(f)
+                
+                sim_id = meta.get("simulation_id")
+                if sim_id:
+                    if sim_id not in sim_to_reports:
+                        sim_to_reports[sim_id] = []
+                    sim_to_reports[sim_id].append({
+                        "report_id": meta.get("report_id"),
+                        "created_at": meta.get("created_at", ""),
+                    })
+            except Exception:
+                continue
+        
+        # For each simulation, find the latest report
+        sim_to_latest_report = {}
+        for sim_id, reports in sim_to_reports.items():
+            reports.sort(key=lambda x: x.get("created_at", ""), reverse=True)
+            sim_to_latest_report[sim_id] = reports[0].get("report_id")
+            
+        return sim_to_latest_report
+    except Exception as e:
+        logger.warning(f"Failed to build simulation to report map: {e}")
+        return {}
+
+
 @simulation_bp.route('/history', methods=['GET'])
 def get_simulation_history():
     """
@@ -984,6 +1033,9 @@ def get_simulation_history():
             key=lambda s: s.created_at,
             reverse=True,
         )
+        
+        # Build mapping of simulation to report in advance to avoid O(N*M) disk scans
+        report_map = _build_simulation_to_report_map()
         
         # Enhance simulation data and complement projects where simulations have not yet been created
         enriched_simulations = []
@@ -1030,7 +1082,7 @@ def get_simulation_history():
                 sim_dict["files"] = []
             
             # Get the associated report_id (find the latest report for this simulation)
-            sim_dict["report_id"] = _get_report_id_for_simulation(sim.simulation_id)
+            sim_dict["report_id"] = report_map.get(sim.simulation_id)
             
             # Add version number
             sim_dict["version"] = "v1.0.2"

@@ -429,6 +429,7 @@ class ZepToolsService:
         self.client = Zep(api_key=self.api_key)
         # LLM client for InsightForge to generate subproblems
         self._llm_client = llm_client
+        self._node_cache = {}  # In-memory node cache
         logger.info(t("console.zepToolsInitialized"))
     
     @property
@@ -722,6 +723,9 @@ class ZepToolsService:
                     Returns:
                         Node information or None
         """
+        if hasattr(self, '_node_cache') and node_uuid in self._node_cache:
+            return self._node_cache[node_uuid]
+            
         logger.info(t("console.fetchingNodeDetail", uuid=node_uuid[:8]))
         
         try:
@@ -733,13 +737,18 @@ class ZepToolsService:
             if not node:
                 return None
             
-            return NodeInfo(
+            node_info = NodeInfo(
                 uuid=getattr(node, 'uuid_', None) or getattr(node, 'uuid', ''),
                 name=node.name or "",
                 labels=node.labels or [],
                 summary=node.summary or "",
                 attributes=node.attributes or {}
             )
+            
+            if hasattr(self, '_node_cache'):
+                self._node_cache[node_uuid] = node_info
+                
+            return node_info
         except Exception as e:
             logger.error(t("console.fetchNodeDetailFailed", error=str(e)))
             return None
@@ -747,8 +756,6 @@ class ZepToolsService:
     def get_node_edges(self, graph_id: str, node_uuid: str) -> List[EdgeInfo]:
         """
             Get all edges related to a node
-
-                    By getting all the edges of the graph and then filtering out the edges related to the specified node
 
                     Args:
                         graph_id: graph ID
@@ -760,14 +767,27 @@ class ZepToolsService:
         logger.info(t("console.fetchingNodeEdges", uuid=node_uuid[:8]))
         
         try:
-            # Get all edges of the graph and then filter
-            all_edges = self.get_all_edges(graph_id)
+            # Direct query instead of scanning all edges
+            edges = self.client.graph.node.get_entity_edges(node_uuid)
             
             result = []
-            for edge in all_edges:
-                # Checks whether an edge is related to a specified node (as source or target)
-                if edge.source_node_uuid == node_uuid or edge.target_node_uuid == node_uuid:
-                    result.append(edge)
+            for edge in edges:
+                edge_uuid = getattr(edge, 'uuid_', None) or getattr(edge, 'uuid', None) or ""
+                edge_info = EdgeInfo(
+                    uuid=str(edge_uuid) if edge_uuid else "",
+                    name=edge.name or "",
+                    fact=edge.fact or "",
+                    source_node_uuid=edge.source_node_uuid or "",
+                    target_node_uuid=edge.target_node_uuid or ""
+                )
+                
+                # Add time information
+                edge_info.created_at = getattr(edge, 'created_at', None)
+                edge_info.valid_at = getattr(edge, 'valid_at', None)
+                edge_info.invalid_at = getattr(edge, 'invalid_at', None)
+                edge_info.expired_at = getattr(edge, 'expired_at', None)
+                
+                result.append(edge_info)
             
             logger.info(t("console.foundNodeEdges", count=len(result)))
             return result
