@@ -365,6 +365,21 @@ const addLog = (msg) => {
   emit('add-log', msg)
 }
 
+const normalizeActionId = (action) => {
+  return action.id || `${action.timestamp}-${action.platform}-${action.agent_id}-${action.action_type}`
+}
+
+const compareActionsChronologically = (left, right) => {
+  const leftTime = Date.parse(left.timestamp || '') || 0
+  const rightTime = Date.parse(right.timestamp || '') || 0
+
+  if (leftTime !== rightTime) {
+    return leftTime - rightTime
+  }
+
+  return normalizeActionId(left).localeCompare(normalizeActionId(right))
+}
+
 // Reset all state (for simulation restart)
 const resetAllState = () => {
   phase.value = 0
@@ -377,6 +392,117 @@ const resetAllState = () => {
   isStarting.value = false
   isStopping.value = false
   stopPolling()  // Stop any existing polling
+}
+
+const applyRunStatus = (data) => {
+  runStatus.value = data || {}
+  prevTwitterRound.value = data?.twitter_current_round || 0
+  prevRedditRound.value = data?.reddit_current_round || 0
+}
+
+const mergeActions = (serverActions, replaceAll = false) => {
+  const mergedIds = replaceAll ? new Set() : new Set(actionIds.value)
+  const mergedActions = replaceAll ? [] : [...allActions.value]
+
+  serverActions.forEach(action => {
+    const actionId = normalizeActionId(action)
+    if (mergedIds.has(actionId)) {
+      return
+    }
+
+    mergedIds.add(actionId)
+    mergedActions.push({
+      ...action,
+      _uniqueId: actionId
+    })
+  })
+
+  mergedActions.sort(compareActionsChronologically)
+  actionIds.value = mergedIds
+  allActions.value = mergedActions
+}
+
+const syncPhaseWithRunStatus = (data) => {
+  const runnerStatus = data?.runner_status || 'idle'
+
+  if (['starting', 'running', 'stopping'].includes(runnerStatus)) {
+    phase.value = 1
+    emit('update-status', 'processing')
+    return
+  }
+
+  if (['completed', 'stopped'].includes(runnerStatus)) {
+    phase.value = 2
+    emit('update-status', 'completed')
+    return
+  }
+
+  if (runnerStatus === 'failed') {
+    phase.value = 0
+    emit('update-status', 'error')
+    return
+  }
+
+  phase.value = 0
+}
+
+const resumeExistingSimulation = async (data) => {
+  const runnerStatus = data?.runner_status || 'idle'
+  const isActive = ['starting', 'running', 'stopping'].includes(runnerStatus)
+
+  addLog(isActive ? t('log.attachedRunningSim') : t('log.loadedExistingSimState'))
+  applyRunStatus(data)
+  syncPhaseWithRunStatus(data)
+  await fetchRunStatusDetail(true)
+
+  if (isActive) {
+    startStatusPolling()
+    startDetailPolling()
+  } else if (runnerStatus === 'failed' && data?.error) {
+    addLog(t('log.simFailed', { error: data.error }))
+  }
+}
+
+const hasPersistedRun = (data) => {
+  if (!data) return false
+
+  const runnerStatus = data.runner_status || 'idle'
+  const terminalStatuses = ['completed', 'stopped', 'failed']
+
+  if (['starting', 'running', 'stopping'].includes(runnerStatus)) {
+    return true
+  }
+
+  if (!terminalStatuses.includes(runnerStatus)) {
+    return false
+  }
+
+  return Boolean(
+    data.started_at ||
+    data.process_pid ||
+    data.current_round > 0 ||
+    data.total_actions_count > 0
+  )
+}
+
+const resumeOrStartSimulation = async () => {
+  if (!props.simulationId) {
+    addLog(t('log.errorMissingSimId'))
+    emit('update-status', 'error')
+    return
+  }
+
+  try {
+    const statusRes = await getRunStatus(props.simulationId)
+    if (statusRes.success && hasPersistedRun(statusRes.data)) {
+      await resumeExistingSimulation(statusRes.data)
+      return
+    }
+  } catch (err) {
+    console.warn('Failed to inspect existing simulation run:', err)
+  }
+
+  await doStartSimulation()
 }
 
 // Start simulation
@@ -398,7 +524,6 @@ const doStartSimulation = async () => {
     const params = {
       simulation_id: props.simulationId,
       platform: 'parallel',
-      force: true,  // Force restart
       enable_graph_memory_update: true  // Enable dynamic graph memory updates
     }
     
@@ -412,15 +537,20 @@ const doStartSimulation = async () => {
     const res = await startSimulation(params)
     
     if (res.success && res.data) {
-      if (res.data.force_restarted) {
-        addLog(t('log.oldSimCleared'))
+      if (res.data.resumed) {
+        addLog(t('log.attachedRunningSim'))
+      } else {
+        if (res.data.force_restarted) {
+          addLog(t('log.oldSimCleared'))
+        }
+        addLog(t('log.engineStarted'))
+        addLog(`  ├─ PID: ${res.data.process_pid || '-'}`)
       }
-      addLog(t('log.engineStarted'))
-      addLog(`  ├─ PID: ${res.data.process_pid || '-'}`)
       
       phase.value = 1
-      runStatus.value = res.data
+      applyRunStatus(res.data)
       
+      await fetchRunStatusDetail(true)
       startStatusPolling()
       startDetailPolling()
     } else {
@@ -467,10 +597,12 @@ let statusTimer = null
 let detailTimer = null
 
 const startStatusPolling = () => {
+  if (statusTimer) return
   statusTimer = setInterval(fetchRunStatus, 2000)
 }
 
 const startDetailPolling = () => {
+  if (detailTimer) return
   detailTimer = setInterval(fetchRunStatusDetail, 3000)
 }
 
@@ -498,7 +630,7 @@ const fetchRunStatus = async () => {
     if (res.success && res.data) {
       const data = res.data
       
-      runStatus.value = data
+      applyRunStatus(data)
       
       // Detect round changes per platform and log
       if (data.twitter_current_round > prevTwitterRound.value) {
@@ -513,6 +645,7 @@ const fetchRunStatus = async () => {
       
       // Detect simulation completion via runner_status or platform completion
       const isCompleted = data.runner_status === 'completed' || data.runner_status === 'stopped'
+      const isFailed = data.runner_status === 'failed'
       
       // Extra check: platforms may report done before runner_status updates
       // Infer completion from twitter_completed and reddit_completed
@@ -526,6 +659,11 @@ const fetchRunStatus = async () => {
         phase.value = 2
         stopPolling()
         emit('update-status', 'completed')
+      } else if (isFailed) {
+        addLog(t('log.simFailed', { error: data.error || t('common.unknownError') }))
+        phase.value = 0
+        stopPolling()
+        emit('update-status', 'error')
       }
     }
   } catch (err) {
@@ -557,34 +695,14 @@ const checkPlatformsCompleted = (data) => {
   return true
 }
 
-const fetchRunStatusDetail = async () => {
+const fetchRunStatusDetail = async (replaceAll = false) => {
   if (!props.simulationId) return
   
   try {
     const res = await getRunStatusDetail(props.simulationId)
     
     if (res.success && res.data) {
-      // Use all_actions for full action list
-      const serverActions = res.data.all_actions || []
-      
-      // Incrementally add new actions (deduped)
-      let newActionsAdded = 0
-      serverActions.forEach(action => {
-        // Generate unique ID
-        const actionId = action.id || `${action.timestamp}-${action.platform}-${action.agent_id}-${action.action_type}`
-        
-        if (!actionIds.value.has(actionId)) {
-          actionIds.value.add(actionId)
-          allActions.value.push({
-            ...action,
-            _uniqueId: actionId
-          })
-          newActionsAdded++
-        }
-      })
-      
-      // Do not auto-scroll; let user browse timeline
-      // New actions append at bottom
+      mergeActions(res.data.all_actions || [], replaceAll)
     }
   } catch (err) {
     console.warn('获取详细状态失败:', err)
@@ -689,9 +807,7 @@ watch(() => props.systemLogs?.length, () => {
 
 onMounted(() => {
   addLog(t('log.step3Init'))
-  if (props.simulationId) {
-    doStartSimulation()
-  }
+  resumeOrStartSimulation()
 })
 
 onUnmounted(() => {

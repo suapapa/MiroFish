@@ -73,7 +73,7 @@ import { useRoute, useRouter } from 'vue-router'
 import GraphPanel from '../components/GraphPanel.vue'
 import Step2EnvSetup from '../components/Step2EnvSetup.vue'
 import { getProject, getGraphData } from '../api/graph'
-import { getSimulation, stopSimulation, getEnvStatus, closeSimulationEnv } from '../api/simulation'
+import { getSimulation, getRunStatus } from '../api/simulation'
 import LanguageSwitcher from '../components/LanguageSwitcher.vue'
 import { useI18n } from 'vue-i18n'
 
@@ -179,67 +179,48 @@ const handleNextStep = (params = {}) => {
 
 // --- Data Logic ---
 
-/**
- * Check and stop a running simulation.
- * When the user returns from Step 3 to Step 2, assume they want to exit the simulation.
- */
-const checkAndStopRunningSimulation = async () => {
-  if (!currentSimulationId.value) return
-  
-  try {
-    // Check if simulation environment is alive
-    const envStatusRes = await getEnvStatus({ simulation_id: currentSimulationId.value })
-    
-    if (envStatusRes.success && envStatusRes.data?.env_alive) {
-      addLog(t('log.detectedSimEnvRunning'))
-      
-      // Try graceful simulation environment shutdown
-      try {
-        const closeRes = await closeSimulationEnv({ 
-          simulation_id: currentSimulationId.value,
-          timeout: 10  // 10 second timeout
-        })
-        
-        if (closeRes.success) {
-          addLog(t('log.simEnvClosed'))
-        } else {
-          addLog(t('log.closeSimEnvFailedWithError', { error: closeRes.error || t('common.unknownError') }))
-          // If graceful shutdown fails, try force stop
-          await forceStopSimulation()
-        }
-      } catch (closeErr) {
-        addLog(t('log.closeSimEnvException', { error: closeErr.message }))
-        // If graceful shutdown throws, try force stop
-        await forceStopSimulation()
-      }
-    } else {
-      // Env not running but process may remain; check simulation status
-      const simRes = await getSimulation(currentSimulationId.value)
-      if (simRes.success && simRes.data?.status === 'running') {
-        addLog(t('log.detectedSimRunning'))
-        await forceStopSimulation()
-      }
-    }
-  } catch (err) {
-    // Env status check failure should not block flow
-    console.warn('检查模拟状态失败:', err)
+const hasPersistedRunState = (runState) => {
+  if (!runState) return false
+
+  const runnerStatus = runState.runner_status || 'idle'
+  const terminalStatuses = ['completed', 'stopped', 'failed']
+
+  if (['starting', 'running', 'stopping'].includes(runnerStatus)) {
+    return true
   }
+
+  if (!terminalStatuses.includes(runnerStatus)) {
+    return false
+  }
+
+  return Boolean(
+    runState.started_at ||
+    runState.process_pid ||
+    runState.current_round > 0 ||
+    runState.total_actions_count > 0
+  )
 }
 
-/**
- * Force-stop the simulation.
- */
-const forceStopSimulation = async () => {
+const redirectToRunViewIfNeeded = async () => {
+  if (!currentSimulationId.value || route.query.view === 'setup') {
+    return false
+  }
+
   try {
-    const stopRes = await stopSimulation({ simulation_id: currentSimulationId.value })
-    if (stopRes.success) {
-      addLog(t('log.simForceStopSuccess'))
-    } else {
-      addLog(t('log.forceStopSimFailed', { error: stopRes.error || t('common.unknownError') }))
+    const runRes = await getRunStatus(currentSimulationId.value)
+    if (runRes.success && hasPersistedRunState(runRes.data)) {
+      addLog(t('log.resumingSimulationRun'))
+      await router.replace({
+        name: 'SimulationRun',
+        params: { simulationId: currentSimulationId.value }
+      })
+      return true
     }
   } catch (err) {
-    addLog(t('log.forceStopSimException', { error: err.message }))
+    console.warn('Failed to inspect existing simulation run state:', err)
   }
+
+  return false
 }
 
 const loadSimulationData = async () => {
@@ -295,12 +276,11 @@ const refreshGraph = () => {
 
 onMounted(async () => {
   addLog(t('log.simViewInit'))
-  
-  // Check and stop running simulation (when user returns from Step 3)
-  await checkAndStopRunningSimulation()
-  
-  // Load simulation data
-  loadSimulationData()
+
+  const redirected = await redirectToRunViewIfNeeded()
+  if (!redirected) {
+    loadSimulationData()
+  }
 })
 </script>
 
@@ -438,4 +418,3 @@ onMounted(async () => {
   border-right: 1px solid #EAEAEA;
 }
 </style>
-

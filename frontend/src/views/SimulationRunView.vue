@@ -196,7 +196,11 @@ const handleGoBack = async () => {
   }
   
   // Return to Step 2 (environment setup)
-  router.push({ name: 'Simulation', params: { simulationId: currentSimulationId.value } })
+  router.push({
+    name: 'Simulation',
+    params: { simulationId: currentSimulationId.value },
+    query: { view: 'setup' }
+  })
 }
 
 const handleNextStep = () => {
@@ -451,4 +455,3 @@ onUnmounted(() => {
   border-right: 1px solid #EAEAEA;
 }
 </style>
-

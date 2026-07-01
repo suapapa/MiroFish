@@ -1661,6 +1661,46 @@ def generate_profiles():
 
 # ============== Simulation operation control interface ==============
 
+def _map_runner_status_to_simulation_status(runner_status: RunnerStatus) -> Optional[SimulationStatus]:
+    """Map runner state to persisted simulation status."""
+    mapping = {
+        RunnerStatus.STARTING: SimulationStatus.RUNNING,
+        RunnerStatus.RUNNING: SimulationStatus.RUNNING,
+        RunnerStatus.STOPPING: SimulationStatus.RUNNING,
+        RunnerStatus.PAUSED: SimulationStatus.PAUSED,
+        RunnerStatus.STOPPED: SimulationStatus.STOPPED,
+        RunnerStatus.COMPLETED: SimulationStatus.COMPLETED,
+        RunnerStatus.FAILED: SimulationStatus.FAILED,
+    }
+    return mapping.get(runner_status)
+
+
+def _sync_simulation_status_from_run_state(
+    manager: SimulationManager,
+    state,
+    run_state,
+):
+    """Keep state.json aligned with run_state.json."""
+    if not state or not run_state:
+        return
+
+    mapped_status = _map_runner_status_to_simulation_status(run_state.runner_status)
+    if mapped_status and state.status != mapped_status:
+        state.status = mapped_status
+        manager._save_simulation_state(state)
+
+
+def _can_attach_to_existing_run(run_state) -> bool:
+    """Return True when clients should attach to the active run instead of restarting it."""
+    if not run_state:
+        return False
+
+    return run_state.runner_status in (
+        RunnerStatus.STARTING,
+        RunnerStatus.RUNNING,
+        RunnerStatus.STOPPING,
+    )
+
 @simulation_bp.route('/start', methods=['POST'])
 def start_simulation():
     """
@@ -1747,6 +1787,20 @@ def start_simulation():
                 "success": False,
                 "error": t('api.simulationNotFound', id=simulation_id)
             }), 404
+
+        existing_run_state = SimulationRunner.get_run_state(simulation_id)
+        _sync_simulation_status_from_run_state(manager, state, existing_run_state)
+
+        if not force and _can_attach_to_existing_run(existing_run_state):
+            response_data = existing_run_state.to_dict()
+            response_data['graph_memory_update_enabled'] = SimulationRunner._graph_memory_enabled.get(simulation_id, False)
+            response_data['force_restarted'] = False
+            response_data['resumed'] = True
+
+            return jsonify({
+                "success": True,
+                "data": response_data
+            })
 
         force_restarted = False
         
@@ -1942,7 +1996,12 @@ def get_run_status(simulation_id: str):
                 }
     """
     try:
+        manager = SimulationManager()
+        state = manager.get_simulation(simulation_id)
         run_state = SimulationRunner.get_run_state(simulation_id)
+
+        if state and run_state:
+            _sync_simulation_status_from_run_state(manager, state, run_state)
         
         if not run_state:
             return jsonify({
