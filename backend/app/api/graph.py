@@ -433,6 +433,8 @@ def build_graph():
                     )
                 
                 builder._wait_for_episodes(episode_uuids, wait_progress_callback)
+
+                builder._try_save_graph_cache(graph_id)
                 
                 task_manager.update_task(
                     task_id,

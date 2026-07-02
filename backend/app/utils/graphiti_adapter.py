@@ -63,7 +63,7 @@ def _fetch_group_items_with_retry(
 
     for attempt in range(max_attempts):
         try:
-            items = _run_with_graphiti(fetch_coro_factory)
+            items = _run_with_read_driver(fetch_coro_factory)
             return view_factory(items or [])
         except Exception as e:
             if _empty_list_if_not_found(e, resource) is None:
@@ -109,10 +109,10 @@ class _AsyncRunner:
     _instance: Optional["_AsyncRunner"] = None
     _lock = threading.Lock()
 
-    def __init__(self):
+    def __init__(self, name: str = "graphiti-loop"):
         self._loop = asyncio.new_event_loop()
         self._thread = threading.Thread(
-            target=self._run_loop, name="graphiti-loop", daemon=True
+            target=self._run_loop, name=name, daemon=True
         )
         self._thread.start()
 
@@ -139,8 +139,28 @@ class _AsyncRunner:
         return cls._instance
 
 
+class _ReadAsyncRunner(_AsyncRunner):
+    """Dedicated loop for FalkorDB reads so pagination is not queued behind long write episodes."""
+
+    _instance: Optional["_ReadAsyncRunner"] = None
+    _lock = threading.Lock()
+
+    @classmethod
+    def instance(cls) -> "_ReadAsyncRunner":
+        if cls._instance is None:
+            with cls._lock:
+                if cls._instance is None:
+                    cls._instance = cls(name="graphiti-read-loop")
+        return cls._instance
+
+
 def _run(coro, timeout: float = 120.0):
     return _AsyncRunner.instance().run(coro, timeout=timeout)
+
+
+def _run_read(coro, timeout: Optional[float] = None):
+    timeout = Config.GRAPHITI_READ_TIMEOUT if timeout is None else timeout
+    return _ReadAsyncRunner.instance().run(coro, timeout=timeout)
 
 
 def _run_with_graphiti(coro_factory, timeout: float = 120.0):
@@ -151,6 +171,16 @@ def _run_with_graphiti(coro_factory, timeout: float = 120.0):
         return await coro_factory(graphiti)
 
     return _run(_do(), timeout=timeout)
+
+
+def _run_with_read_driver(coro_factory, timeout: Optional[float] = None):
+    """Run FalkorDB read queries on a separate loop/driver so they are not blocked by add_episode writes."""
+    driver = _get_read_driver()
+
+    async def _do():
+        return await coro_factory(driver)
+
+    return _run_read(_do(), timeout=timeout)
 
 
 # ════════════════════════════════════════════════════════════════
@@ -359,6 +389,29 @@ _ontology_store = _OntologyStore()
 
 _graphiti = None
 _graphiti_lock = threading.Lock()
+_read_driver = None
+_read_driver_lock = threading.Lock()
+
+
+def _create_read_driver():
+    from graphiti_core.driver.falkordb_driver import FalkorDriver
+
+    return FalkorDriver(
+        host=Config.GRAPH_DB_HOST,
+        port=Config.GRAPH_DB_PORT,
+        username=Config.GRAPH_DB_USERNAME,
+        password=Config.GRAPH_DB_PASSWORD,
+        database=Config.GRAPH_DB_NAME,
+    )
+
+
+def _get_read_driver():
+    global _read_driver
+    if _read_driver is None:
+        with _read_driver_lock:
+            if _read_driver is None:
+                _read_driver = _create_read_driver()
+    return _read_driver
 
 
 def _create_graphiti():
@@ -486,9 +539,9 @@ class _NodeNamespace:
     ) -> List[_NodeView]:
         from graphiti_core.nodes import EntityNode
 
-        async def _do(g):
+        async def _do(driver):
             return await EntityNode.get_by_group_ids(
-                g.driver, [graph_id], limit=limit, uuid_cursor=uuid_cursor
+                driver, [graph_id], limit=limit, uuid_cursor=uuid_cursor
             )
 
         return _fetch_group_items_with_retry(
@@ -501,19 +554,19 @@ class _NodeNamespace:
     def get(self, uuid_: str = '', **kwargs) -> Optional[_NodeView]:
         from graphiti_core.nodes import EntityNode
 
-        async def _do(g):
-            return await EntityNode.get_by_uuid(g.driver, uuid_)
+        async def _do(driver):
+            return await EntityNode.get_by_uuid(driver, uuid_)
 
-        node = _run_with_graphiti(_do)
+        node = _run_with_read_driver(_do)
         return _NodeView(node) if node else None
 
     def get_entity_edges(self, node_uuid: str = '', **kwargs) -> List[_EdgeView]:
         from graphiti_core.edges import EntityEdge
 
-        async def _do(g):
-            return await EntityEdge.get_by_node_uuid(g.driver, node_uuid)
+        async def _do(driver):
+            return await EntityEdge.get_by_node_uuid(driver, node_uuid)
 
-        edges = _run_with_graphiti(_do)
+        edges = _run_with_read_driver(_do)
         return [_EdgeView(e) for e in (edges or [])]
 
 
@@ -529,9 +582,9 @@ class _EdgeNamespace:
     ) -> List[_EdgeView]:
         from graphiti_core.edges import EntityEdge
 
-        async def _do(g):
+        async def _do(driver):
             return await EntityEdge.get_by_group_ids(
-                g.driver, [graph_id], limit=limit, uuid_cursor=uuid_cursor
+                driver, [graph_id], limit=limit, uuid_cursor=uuid_cursor
             )
 
         return _fetch_group_items_with_retry(

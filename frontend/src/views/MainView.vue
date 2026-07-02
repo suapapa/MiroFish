@@ -391,8 +391,8 @@ const fetchGraphData = async () => {
 
   isGraphDataRequestInFlight = true
   try {
-    // During build, bypass cache to reflect latest FalkorDB nodes/edges
-    const gRes = await getGraphData(graphId, { refresh: currentPhase.value === 1 })
+    // Prefer on-disk cache during polling; build worker refreshes cache after episode processing
+    const gRes = await getGraphData(graphId, { refresh: false, timeout: 180000 })
     if (gRes.success) {
       const nodeCount = gRes.data.node_count || gRes.data.nodes?.length || 0
       const edgeCount = gRes.data.edge_count || gRes.data.edges?.length || 0
@@ -504,7 +504,7 @@ const loadGraph = async (graphId, { refresh = false } = {}) => {
   syncGraphId(graphId)
   addLog(`Loading full graph data: ${graphId}`)
   try {
-    const res = await getGraphData(graphId, { refresh: refresh || currentPhase.value === 1 })
+    const res = await getGraphData(graphId, { refresh, timeout: 180000 })
     if (res.success) {
       graphData.value = res.data
       addLog('Graph data loaded successfully.')

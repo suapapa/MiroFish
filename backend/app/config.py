@@ -85,6 +85,11 @@ class Config:
     GRAPH_DB_PASSWORD = os.environ.get('GRAPH_DB_PASSWORD', '') or None
     # Graph database name inside FalkorDB (graph_ids isolated via group_id)
     GRAPH_DB_NAME = os.environ.get('GRAPH_DB_NAME', 'mirofish')
+    # FalkorDB read-query timeout (seconds) for paginated node/edge fetches
+    GRAPHITI_READ_TIMEOUT = float(os.environ.get('GRAPHITI_READ_TIMEOUT', '60'))
+    # Upper bounds for full-graph pagination (protects against unbounded scans/timeouts)
+    GRAPH_MAX_NODES = int(os.environ.get('GRAPH_MAX_NODES', '2000'))
+    GRAPH_MAX_EDGES = int(os.environ.get('GRAPH_MAX_EDGES', '10000'))
 
     # Embedding settings (Graphiti requires vectors; defaults reuse LLM credentials)
     EMBEDDER_API_KEY = os.environ.get('EMBEDDER_API_KEY', '') or LLM_API_KEY

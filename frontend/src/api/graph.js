@@ -63,7 +63,7 @@ export function getTaskStatus(taskId) {
  * @returns {Promise}
  */
 export function getGraphData(graphId, options = {}) {
-  const { refresh = false, timeout = 120000 } = options
+  const { refresh = false, timeout = 180000 } = options
   return service({
     url: `/api/graph/data/${graphId}`,
     method: 'get',

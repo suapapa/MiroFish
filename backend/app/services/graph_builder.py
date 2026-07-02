@@ -168,6 +168,8 @@ class GraphBuilderService:
                     message=msg
                 )
             )
+
+            self._try_save_graph_cache(graph_id)
             
             # 6. Fetch graph info
             self.task_manager.update_task(
@@ -367,6 +369,13 @@ class GraphBuilderService:
             edge_count=len(edges),
             entity_types=list(entity_types)
         )
+
+    def _try_save_graph_cache(self, graph_id: str) -> None:
+        """Best-effort snapshot for UI polling during long builds; failures are non-fatal."""
+        try:
+            self.get_graph_data(graph_id, use_cache=False)
+        except Exception as e:
+            logger.warning(f"Incremental graph cache update failed (graph={graph_id}): {e}")
     
     def get_graph_data(self, graph_id: str, use_cache: bool = True) -> Dict[str, Any]:
         """
@@ -387,8 +396,19 @@ class GraphBuilderService:
                 logger.info(f"Loaded graph data from cache: graph={graph_id}")
                 return cached
 
-        nodes = fetch_all_nodes(self.client, graph_id)
-        edges = fetch_all_edges(self.client, graph_id)
+        try:
+            nodes = fetch_all_nodes(self.client, graph_id)
+            edges = fetch_all_edges(self.client, graph_id)
+        except (TimeoutError, InternalServerError) as e:
+            cached = load_graph_cache(graph_id)
+            if cached and cached.get('nodes'):
+                logger.warning(
+                    f"Live graph fetch failed for graph={graph_id}, returning stale cache: {e}"
+                )
+                stale = dict(cached)
+                stale['stale'] = True
+                return stale
+            raise
 
         # Node map for resolving names on edges
         node_map = {}
