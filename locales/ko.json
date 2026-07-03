@@ -309,6 +309,7 @@
     "relationship": "관계",
     "graphDataLoading": "그래프 데이터 로딩 중...",
     "waitingOntology": "온톨로지 생성 대기 중...",
+    "waitingGraphData": "그래프 데이터를 기다리는 중...",
     "toggleMaximize": "최대화/복원",
     "closeHint": "힌트 닫기"
   },

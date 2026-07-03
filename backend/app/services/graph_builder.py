@@ -393,8 +393,12 @@ class GraphBuilderService:
         if use_cache:
             cached = load_graph_cache(graph_id)
             if cached and cached.get('nodes') is not None:
-                logger.info(f"Loaded graph data from cache: graph={graph_id}")
-                return cached
+                cached_node_count = cached.get('node_count', len(cached.get('nodes', [])))
+                cached_edge_count = cached.get('edge_count', len(cached.get('edges', [])))
+                if cached_node_count > 0 or cached_edge_count > 0 or cached.get('stale'):
+                    logger.info(f"Loaded graph data from cache: graph={graph_id}")
+                    return cached
+                logger.info(f"Ignoring empty graph cache and refreshing live data: graph={graph_id}")
 
         try:
             nodes = fetch_all_nodes(self.client, graph_id)
@@ -474,16 +478,22 @@ class GraphBuilderService:
             "edge_count": len(edges_data),
         }
 
-        # During build FalkorDB may briefly return empty — do not overwrite existing cache
-        if len(nodes_data) == 0:
+        # During build FalkorDB may briefly return empty — do not persist or overwrite empty snapshots
+        if len(nodes_data) == 0 and len(edges_data) == 0:
             existing = load_graph_cache(graph_id)
             existing_nodes = existing.get("node_count", len(existing.get("nodes", []))) if existing else 0
-            if existing_nodes > 0:
+            existing_edges = existing.get("edge_count", len(existing.get("edges", []))) if existing else 0
+            if existing_nodes > 0 or existing_edges > 0:
                 logger.warning(
                     f"Live fetch returned empty graph but cache has {existing_nodes} nodes "
                     f"(graph={graph_id}); keeping cached snapshot"
                 )
                 return existing
+            logger.info(
+                f"Live fetch returned empty graph with no cached data; skipping cache write "
+                f"(graph={graph_id})"
+            )
+            return result
 
         save_graph_cache(graph_id, result)
         return result

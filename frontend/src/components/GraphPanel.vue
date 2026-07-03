@@ -16,7 +16,7 @@
     
     <div class="graph-container" ref="graphContainer">
       <!-- Graph visualization -->
-      <div v-if="graphData" class="graph-view">
+      <div v-if="hasRenderableGraph" class="graph-view">
         <svg ref="graphSvg" class="graph-svg"></svg>
         
         <!-- Building/simulating hint -->
@@ -209,12 +209,12 @@
       <!-- Waiting/empty state -->
       <div v-else class="graph-state">
         <div class="empty-icon">❖</div>
-        <p class="empty-text">{{ $t('graph.waitingOntology') }}</p>
+        <p class="empty-text">{{ graphData ? $t('graph.waitingGraphData') : $t('graph.waitingOntology') }}</p>
       </div>
     </div>
 
     <!-- Bottom legend (bottom left) -->
-    <div v-if="graphData && entityTypes.length" class="graph-legend">
+    <div v-if="hasRenderableGraph && entityTypes.length" class="graph-legend">
       <span class="legend-title">Entity Types</span>
       <div class="legend-items">
         <div class="legend-item" v-for="type in entityTypes" :key="type.name">
@@ -225,7 +225,7 @@
     </div>
     
     <!-- Toggle edge labels -->
-    <div v-if="graphData" class="edge-labels-toggle">
+    <div v-if="hasRenderableGraph" class="edge-labels-toggle">
       <label class="toggle-switch">
         <input type="checkbox" v-model="showEdgeLabels" />
         <span class="slider"></span>
@@ -296,6 +296,14 @@ const entityTypes = computed(() => {
     typeMap[type].count++
   })
   return Object.values(typeMap)
+})
+
+const hasRenderableGraph = computed(() => {
+  const nodeCount = props.graphData?.node_count
+  if (typeof nodeCount === 'number') {
+    return nodeCount > 0
+  }
+  return (props.graphData?.nodes?.length || 0) > 0
 })
 
 // Format time

@@ -309,6 +309,7 @@
     "relationship": "Relationship",
     "graphDataLoading": "图谱数据加载中...",
     "waitingOntology": "等待本体生成...",
+    "waitingGraphData": "等待图谱数据...",
     "toggleMaximize": "最大化/还原",
     "closeHint": "关闭提示"
   },

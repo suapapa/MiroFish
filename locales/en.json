@@ -309,6 +309,7 @@
     "relationship": "Relationship",
     "graphDataLoading": "Loading graph data...",
     "waitingOntology": "Waiting for ontology generation...",
+    "waitingGraphData": "Waiting for graph data...",
     "toggleMaximize": "Maximize/Restore",
     "closeHint": "Close hint"
   },
