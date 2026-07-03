@@ -60,6 +60,7 @@ class SimulationState:
     entity_types: List[str] = field(default_factory=list)
     
     # Configure build information
+    profiles_generated: bool = False
     config_generated: bool = False
     config_reasoning: str = ""
     
@@ -90,6 +91,7 @@ class SimulationState:
             "entities_count": self.entities_count,
             "profiles_count": self.profiles_count,
             "entity_types": self.entity_types,
+            "profiles_generated": self.profiles_generated,
             "config_generated": self.config_generated,
             "config_reasoning": self.config_reasoning,
             "current_round": self.current_round,
@@ -111,6 +113,7 @@ class SimulationState:
             "entities_count": self.entities_count,
             "profiles_count": self.profiles_count,
             "entity_types": self.entity_types,
+            "profiles_generated": self.profiles_generated,
             "config_generated": self.config_generated,
             "error": self.error,
             "prepare_task_id": self.prepare_task_id,
@@ -183,6 +186,7 @@ class SimulationManager:
             entities_count=data.get("entities_count", 0),
             profiles_count=data.get("profiles_count", 0),
             entity_types=data.get("entity_types", []),
+            profiles_generated=data.get("profiles_generated", False),
             config_generated=data.get("config_generated", False),
             config_reasoning=data.get("config_reasoning", ""),
             current_round=data.get("current_round", 0),
@@ -271,6 +275,10 @@ class SimulationManager:
         
         try:
             state.status = SimulationStatus.PREPARING
+            state.profiles_generated = False
+            state.config_generated = False
+            state.config_reasoning = ""
+            state.error = None
             self._save_simulation_state(state)
             
             sim_dir = self._get_simulation_dir(simulation_id)
@@ -386,7 +394,10 @@ class SimulationManager:
                     current=len(profiles),
                     total=len(profiles)
                 )
-            
+
+            state.profiles_generated = True
+            self._save_simulation_state(state)
+
             # ========== Stage 3: LLM intelligently generates simulation configuration ==========
             if progress_callback:
                 progress_callback(
@@ -395,9 +406,9 @@ class SimulationManager:
                     current=0,
                     total=3
                 )
-            
+
             config_generator = SimulationConfigGenerator()
-            
+
             if progress_callback:
                 progress_callback(
                     "generating_config", 30,
@@ -405,7 +416,22 @@ class SimulationManager:
                     current=1,
                     total=3
                 )
-            
+
+            def config_progress(step: int, total_steps: int, message: str):
+                if not progress_callback or total_steps <= 0:
+                    return
+
+                # Keep room for the "saving config" and "complete" updates.
+                stage_progress = 30 + int((step / total_steps) * 40)
+                progress_callback(
+                    "generating_config",
+                    min(stage_progress, 69),
+                    message,
+                    current=step,
+                    total=total_steps,
+                    item_name=message,
+                )
+
             sim_params = config_generator.generate_config(
                 simulation_id=simulation_id,
                 project_id=state.project_id,
@@ -414,7 +440,8 @@ class SimulationManager:
                 document_text=document_text,
                 entities=filtered.entities,
                 enable_twitter=state.enable_twitter,
-                enable_reddit=state.enable_reddit
+                enable_reddit=state.enable_reddit,
+                progress_callback=config_progress,
             )
             
             if progress_callback:

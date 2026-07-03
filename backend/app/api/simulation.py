@@ -513,6 +513,9 @@ def prepare_simulation():
         # Update simulation status and record task_id for resuming polling after refresh
         state.status = SimulationStatus.PREPARING
         state.prepare_task_id = task_id
+        state.profiles_generated = False
+        state.config_generated = False
+        state.config_reasoning = ""
         state.error = None
         manager._save_simulation_state(state)
         
