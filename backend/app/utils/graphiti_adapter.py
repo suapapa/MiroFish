@@ -10,7 +10,9 @@ oasis_profile_generator) can switch with minimal changes.
 Design notes:
 1. Graphiti is fully async; a dedicated background event-loop thread wraps coroutines
    into sync calls for use in Flask/gunicorn sync workers.
-2. Zep `graph_id` maps to Graphiti `group_id` (multi-tenant isolation).
+2. Graphiti's FalkorDB backend uses one database per `graph_id`; we pass the same
+   value as both database name and `group_id` so reads, writes, and deletes stay
+   on the same physical graph.
 3. Ontology (entity/edge types) is persisted per graph_id on disk and rebuilt into
    Graphiti Pydantic models on each episode write for extraction.
 4. Return objects are lightweight wrappers with Zep-compatible fields (uuid_/name/
@@ -63,7 +65,7 @@ def _fetch_group_items_with_retry(
 
     for attempt in range(max_attempts):
         try:
-            items = _run_with_read_driver(fetch_coro_factory)
+            items = _run_with_read_driver(fetch_coro_factory, database=graph_id)
             return view_factory(items or [])
         except Exception as e:
             if _empty_list_if_not_found(e, resource) is None:
@@ -163,9 +165,9 @@ def _run_read(coro, timeout: Optional[float] = None):
     return _ReadAsyncRunner.instance().run(coro, timeout=timeout)
 
 
-def _run_with_graphiti(coro_factory, timeout: float = 120.0):
+def _run_with_graphiti(coro_factory, database: Optional[str] = None, timeout: float = 120.0):
     """Initialize Graphiti on the worker thread, then submit the coroutine — avoids nested _run deadlock on the loop thread."""
-    graphiti = _get_graphiti()
+    graphiti = _get_graphiti(database=database)
 
     async def _do():
         return await coro_factory(graphiti)
@@ -173,9 +175,13 @@ def _run_with_graphiti(coro_factory, timeout: float = 120.0):
     return _run(_do(), timeout=timeout)
 
 
-def _run_with_read_driver(coro_factory, timeout: Optional[float] = None):
+def _run_with_read_driver(
+    coro_factory,
+    database: Optional[str] = None,
+    timeout: Optional[float] = None,
+):
     """Run FalkorDB read queries on a separate loop/driver so they are not blocked by add_episode writes."""
-    driver = _get_read_driver()
+    driver = _get_read_driver(database=database)
 
     async def _do():
         return await coro_factory(driver)
@@ -384,16 +390,20 @@ _ontology_store = _OntologyStore()
 
 
 # ════════════════════════════════════════════════════════════════
-# Graphiti singleton
+# Graphiti instances / drivers keyed by FalkorDB database name
 # ════════════════════════════════════════════════════════════════
 
-_graphiti = None
+_graphiti_by_db: Dict[str, Any] = {}
 _graphiti_lock = threading.Lock()
-_read_driver = None
+_read_drivers_by_db: Dict[str, Any] = {}
 _read_driver_lock = threading.Lock()
 
 
-def _create_read_driver():
+def _database_name(database: Optional[str]) -> str:
+    return database or Config.GRAPH_DB_NAME
+
+
+def _create_read_driver(database: Optional[str] = None):
     from graphiti_core.driver.falkordb_driver import FalkorDriver
 
     return FalkorDriver(
@@ -401,20 +411,23 @@ def _create_read_driver():
         port=Config.GRAPH_DB_PORT,
         username=Config.GRAPH_DB_USERNAME,
         password=Config.GRAPH_DB_PASSWORD,
-        database=Config.GRAPH_DB_NAME,
+        database=_database_name(database),
     )
 
 
-def _get_read_driver():
-    global _read_driver
-    if _read_driver is None:
+def _get_read_driver(database: Optional[str] = None):
+    db_name = _database_name(database)
+    driver = _read_drivers_by_db.get(db_name)
+    if driver is None:
         with _read_driver_lock:
-            if _read_driver is None:
-                _read_driver = _create_read_driver()
-    return _read_driver
+            driver = _read_drivers_by_db.get(db_name)
+            if driver is None:
+                driver = _create_read_driver(database=db_name)
+                _read_drivers_by_db[db_name] = driver
+    return driver
 
 
-def _create_graphiti():
+def _create_graphiti(database: Optional[str] = None):
     """Lazily create Graphiti instance (FalkorDB driver + OpenAI-compatible LLM/Embedder)."""
     from graphiti_core import Graphiti
     from graphiti_core.driver.falkordb_driver import FalkorDriver
@@ -428,7 +441,7 @@ def _create_graphiti():
         port=Config.GRAPH_DB_PORT,
         username=Config.GRAPH_DB_USERNAME,
         password=Config.GRAPH_DB_PASSWORD,
-        database=Config.GRAPH_DB_NAME,
+        database=_database_name(database),
     )
 
     graphiti_model = Config.GRAPHITI_LLM_MODEL_NAME
@@ -502,17 +515,20 @@ def _create_graphiti():
 
     # Build indices/constraints (idempotent)
     _run(graphiti.build_indices_and_constraints())
-    logger.info("Graphiti(FalkorDB) initialized")
+    logger.info("Graphiti(FalkorDB) initialized: database=%s", _database_name(database))
     return graphiti
 
 
-def _get_graphiti():
-    global _graphiti
-    if _graphiti is None:
+def _get_graphiti(database: Optional[str] = None):
+    db_name = _database_name(database)
+    graphiti = _graphiti_by_db.get(db_name)
+    if graphiti is None:
         with _graphiti_lock:
-            if _graphiti is None:
-                _graphiti = _create_graphiti()
-    return _graphiti
+            graphiti = _graphiti_by_db.get(db_name)
+            if graphiti is None:
+                graphiti = _create_graphiti(database=db_name)
+                _graphiti_by_db[db_name] = graphiti
+    return graphiti
 
 
 # ════════════════════════════════════════════════════════════════
@@ -553,20 +569,22 @@ class _NodeNamespace:
 
     def get(self, uuid_: str = '', **kwargs) -> Optional[_NodeView]:
         from graphiti_core.nodes import EntityNode
+        graph_id = kwargs.get('graph_id')
 
         async def _do(driver):
             return await EntityNode.get_by_uuid(driver, uuid_)
 
-        node = _run_with_read_driver(_do)
+        node = _run_with_read_driver(_do, database=graph_id)
         return _NodeView(node) if node else None
 
     def get_entity_edges(self, node_uuid: str = '', **kwargs) -> List[_EdgeView]:
         from graphiti_core.edges import EntityEdge
+        graph_id = kwargs.get('graph_id')
 
         async def _do(driver):
             return await EntityEdge.get_by_node_uuid(driver, node_uuid)
 
-        edges = _run_with_read_driver(_do)
+        edges = _run_with_read_driver(_do, database=graph_id)
         return [_EdgeView(e) for e in (edges or [])]
 
 
@@ -606,19 +624,18 @@ class _GraphNamespace:
     # ── Graph lifecycle ──
     def create(self, graph_id: str = '', name: str = '', description: str = '', **kwargs):
         """Groups are lazy in Graphiti; ensure instance is ready and return identifier."""
-        _get_graphiti()
+        _get_graphiti(database=graph_id)
         return _EpisodeView(uuid=graph_id)
 
     def delete(self, graph_id: str = '', **kwargs):
         """Delete all nodes/edges (and ontology) under this group_id."""
         async def _do(g):
             await g.driver.execute_query(
-                "MATCH (n {group_id: $gid}) DETACH DELETE n",
-                gid=graph_id,
+                "MATCH (n) DETACH DELETE n",
             )
 
         try:
-            _run_with_graphiti(_do)
+            _run_with_graphiti(_do, database=graph_id)
         finally:
             _ontology_store.delete(graph_id)
             from ..utils.graph_cache import delete_graph_cache
@@ -649,7 +666,7 @@ class _GraphNamespace:
                 edge_type_map=edge_type_map,
             )
 
-        result = _run_with_graphiti(_do, timeout=300.0)
+        result = _run_with_graphiti(_do, database=graph_id, timeout=300.0)
         ep = getattr(result, 'episode', None)
         ep_uuid = getattr(ep, 'uuid', '') if ep else ''
         return _EpisodeView(uuid=ep_uuid)
@@ -682,7 +699,7 @@ class _GraphNamespace:
         async def _do(g):
             return await g.search(query, group_ids=[graph_id], num_results=limit)
 
-        edges = _run_with_graphiti(_do)
+        edges = _run_with_graphiti(_do, database=graph_id)
         return _SearchView(edges=[_EdgeView(e) for e in (edges or [])], nodes=[])
 
     def _search_nodes(self, graph_id: str, query: str, limit: int) -> _SearchView:
@@ -693,7 +710,7 @@ class _GraphNamespace:
             cfg.limit = limit
             return await g._search(query, cfg, group_ids=[graph_id])
 
-        results = _run_with_graphiti(_do)
+        results = _run_with_graphiti(_do, database=graph_id)
         nodes = getattr(results, 'nodes', []) or []
         return _SearchView(edges=[], nodes=[_NodeView(n) for n in nodes])
 

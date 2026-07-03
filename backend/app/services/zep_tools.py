@@ -713,7 +713,7 @@ class ZepToolsService:
         logger.info(t("console.fetchedEdges", count=len(result)))
         return result
     
-    def get_node_detail(self, node_uuid: str) -> Optional[NodeInfo]:
+    def get_node_detail(self, graph_id: str, node_uuid: str) -> Optional[NodeInfo]:
         """
             Get details of a single node
 
@@ -730,7 +730,7 @@ class ZepToolsService:
         
         try:
             node = self._call_with_retry(
-                func=lambda: self.client.graph.node.get(uuid_=node_uuid),
+                func=lambda: self.client.graph.node.get(uuid_=node_uuid, graph_id=graph_id),
                 operation_name=t("console.fetchNodeDetailOp", uuid=node_uuid[:8])
             )
             
@@ -768,7 +768,7 @@ class ZepToolsService:
         
         try:
             # Direct query instead of scanning all edges
-            edges = self.client.graph.node.get_entity_edges(node_uuid)
+            edges = self.client.graph.node.get_entity_edges(node_uuid=node_uuid, graph_id=graph_id)
             
             result = []
             for edge in edges:
@@ -1062,7 +1062,7 @@ class ZepToolsService:
                 continue
             try:
                 # Get information about each relevant node individually
-                node = self.get_node_detail(uuid)
+                node = self.get_node_detail(graph_id, uuid)
                 if node:
                     node_map[uuid] = node
                     entity_type = next((l for l in node.labels if l not in ["Entity", "Node"]), "Entity")

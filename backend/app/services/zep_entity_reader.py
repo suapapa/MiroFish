@@ -191,7 +191,7 @@ class ZepEntityReader:
         logger.info(f"Fetched {len(edges_data)} edges")
         return edges_data
     
-    def get_node_edges(self, node_uuid: str) -> List[Dict[str, Any]]:
+    def get_node_edges(self, graph_id: str, node_uuid: str) -> List[Dict[str, Any]]:
         """
             Get all relevant edges of the specified node (with retry mechanism)
 
@@ -204,7 +204,10 @@ class ZepEntityReader:
         try:
             # Use retry mechanism to call Zep API
             edges = self._call_with_retry(
-                func=lambda: self.client.graph.node.get_entity_edges(node_uuid=node_uuid),
+                func=lambda: self.client.graph.node.get_entity_edges(
+                    node_uuid=node_uuid,
+                    graph_id=graph_id,
+                ),
                 operation_name=f"fetch node edges (node={node_uuid[:8]}...)"
             )
             
@@ -360,7 +363,7 @@ class ZepEntityReader:
         try:
             # Use retry mechanism to get nodes
             node = self._call_with_retry(
-                func=lambda: self.client.graph.node.get(uuid_=entity_uuid),
+                func=lambda: self.client.graph.node.get(uuid_=entity_uuid, graph_id=graph_id),
                 operation_name=f"fetch node detail (uuid={entity_uuid[:8]}...)"
             )
             
@@ -368,7 +371,7 @@ class ZepEntityReader:
                 return None
             
             # Get the edges of a node
-            edges = self.get_node_edges(entity_uuid)
+            edges = self.get_node_edges(graph_id, entity_uuid)
             
             # Get all nodes for association lookup
             all_nodes = self.get_all_nodes(graph_id)
@@ -445,5 +448,4 @@ class ZepEntityReader:
             enrich_with_edges=enrich_with_edges
         )
         return result.entities
-
 
