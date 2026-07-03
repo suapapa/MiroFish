@@ -903,6 +903,10 @@ const pollPrepareStatus = async () => {
       // Parse phase info and emit detailed logs
       if (data.progress_detail) {
         currentStage.value = data.progress_detail.current_stage_name || ''
+
+        if (data.progress_detail.total_items > 0) {
+          expectedTotal.value = data.progress_detail.total_items
+        }
         
         // Emit detailed progress logs (avoid duplicates)
         const detail = data.progress_detail
@@ -956,7 +960,7 @@ const fetchProfilesRealtime = async () => {
       const prevCount = profiles.value.length
       profiles.value = res.data.profiles || []
       // Update only when API returns valid values to avoid overwriting
-      if (res.data.total_expected) {
+      if (res.data.total_expected != null && res.data.total_expected > 0) {
         expectedTotal.value = res.data.total_expected
       }
       
