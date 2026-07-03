@@ -567,6 +567,7 @@
     "step3Init": "Step 3 simulation run initialized",
     "startingDualSim": "Starting dual-platform parallel simulation...",
     "attachedRunningSim": "Reconnected to the already running simulation",
+    "staleProcessRestart": "Restarting simulation after server interruption",
     "loadedExistingSimState": "Loaded existing simulation state",
     "setMaxRounds": "Max simulation rounds set to: {rounds}",
     "graphMemoryUpdateEnabled": "Dynamic graph memory update enabled",

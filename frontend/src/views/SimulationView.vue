@@ -186,7 +186,7 @@ const hasPersistedRunState = (runState) => {
   const terminalStatuses = ['completed', 'stopped', 'failed']
 
   if (['starting', 'running', 'stopping'].includes(runnerStatus)) {
-    return true
+    return runState.process_alive !== false
   }
 
   if (!terminalStatuses.includes(runnerStatus)) {

@@ -567,6 +567,7 @@
     "step3Init": "3단계 시뮬레이션 실행 초기화됨",
     "startingDualSim": "이중 플랫폼 병렬 시뮬레이션 시작 중...",
     "attachedRunningSim": "이미 실행 중인 시뮬레이션에 다시 연결했습니다",
+    "staleProcessRestart": "서버 재시작으로 중단된 시뮬레이션을 다시 시작합니다",
     "loadedExistingSimState": "기존 시뮬레이션 상태를 불러왔습니다",
     "setMaxRounds": "최대 시뮬레이션 라운드 설정: {rounds}",
     "graphMemoryUpdateEnabled": "동적 그래프 메모리 업데이트 활성화됨",

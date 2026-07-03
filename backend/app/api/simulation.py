@@ -1698,10 +1698,16 @@ def _can_attach_to_existing_run(run_state) -> bool:
     if not run_state:
         return False
 
-    return run_state.runner_status in (
+    if run_state.runner_status not in (
         RunnerStatus.STARTING,
         RunnerStatus.RUNNING,
         RunnerStatus.STOPPING,
+    ):
+        return False
+
+    return SimulationRunner.is_simulation_process_alive(
+        run_state.simulation_id,
+        run_state,
     )
 
 @simulation_bp.route('/start', methods=['POST'])

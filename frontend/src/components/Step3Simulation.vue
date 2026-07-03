@@ -463,26 +463,16 @@ const resumeExistingSimulation = async (data) => {
   }
 }
 
-const hasPersistedRun = (data) => {
+const shouldRestartAfterStale = (data) => {
   if (!data) return false
 
   const runnerStatus = data.runner_status || 'idle'
-  const terminalStatuses = ['completed', 'stopped', 'failed']
 
-  if (['starting', 'running', 'stopping'].includes(runnerStatus)) {
+  if (['starting', 'running', 'stopping', 'paused'].includes(runnerStatus) && data.process_alive === false) {
     return true
   }
 
-  if (!terminalStatuses.includes(runnerStatus)) {
-    return false
-  }
-
-  return Boolean(
-    data.started_at ||
-    data.process_pid ||
-    data.current_round > 0 ||
-    data.total_actions_count > 0
-  )
+  return runnerStatus === 'failed' && data.error?.includes('no longer running')
 }
 
 const resumeOrStartSimulation = async () => {
@@ -494,9 +484,25 @@ const resumeOrStartSimulation = async () => {
 
   try {
     const statusRes = await getRunStatus(props.simulationId)
-    if (statusRes.success && hasPersistedRun(statusRes.data)) {
-      await resumeExistingSimulation(statusRes.data)
-      return
+    if (statusRes.success && statusRes.data) {
+      const data = statusRes.data
+      const runnerStatus = data.runner_status || 'idle'
+
+      if (['starting', 'running', 'stopping'].includes(runnerStatus) && data.process_alive !== false) {
+        await resumeExistingSimulation(data)
+        return
+      }
+
+      if (['completed', 'stopped'].includes(runnerStatus)) {
+        await resumeExistingSimulation(data)
+        return
+      }
+
+      if (shouldRestartAfterStale(data)) {
+        addLog(t('log.staleProcessRestart'))
+        await doStartSimulation({ force: true })
+        return
+      }
     }
   } catch (err) {
     console.warn('Failed to inspect existing simulation run:', err)
@@ -506,7 +512,7 @@ const resumeOrStartSimulation = async () => {
 }
 
 // Start simulation
-const doStartSimulation = async () => {
+const doStartSimulation = async ({ force = false } = {}) => {
   if (!props.simulationId) {
     addLog(t('log.errorMissingSimId'))
     return
@@ -530,6 +536,10 @@ const doStartSimulation = async () => {
     if (props.maxRounds) {
       params.max_rounds = props.maxRounds
       addLog(t('log.setMaxRounds', { rounds: props.maxRounds }))
+    }
+
+    if (force) {
+      params.force = true
     }
     
     addLog(t('log.graphMemoryUpdateEnabled'))

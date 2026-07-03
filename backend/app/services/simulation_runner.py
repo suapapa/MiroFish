@@ -46,6 +46,9 @@ class RunnerStatus(str, Enum):
     FAILED = "failed"
 
 
+STALE_PROCESS_ERROR = "Simulation process is no longer running (server may have restarted)"
+
+
 @dataclass
 class AgentAction:
     """Agent action record"""
@@ -182,6 +185,10 @@ class SimulationRunState:
             "completed_at": self.completed_at,
             "error": self.error,
             "process_pid": self.process_pid,
+            "process_alive": SimulationRunner.is_simulation_process_alive(
+                self.simulation_id,
+                self,
+            ),
         }
     
     def to_detail_dict(self) -> Dict[str, Any]:
@@ -227,14 +234,75 @@ class SimulationRunner:
     _graph_memory_enabled: Dict[str, bool] = {}  # simulation_id -> enabled
     
     @classmethod
+    def _is_pid_alive(cls, pid: Optional[int]) -> bool:
+        """Return True when the OS process for pid still exists."""
+        if not pid:
+            return False
+
+        try:
+            os.kill(pid, 0)
+            return True
+        except (OSError, ProcessLookupError):
+            return False
+
+    @classmethod
+    def is_simulation_process_alive(
+        cls,
+        simulation_id: str,
+        state: Optional[SimulationRunState] = None,
+    ) -> bool:
+        """Return True when the simulation subprocess is still running."""
+        process = cls._processes.get(simulation_id)
+        if process is not None:
+            return process.poll() is None
+
+        if state is None:
+            state = cls._run_states.get(simulation_id)
+
+        return cls._is_pid_alive(state.process_pid if state else None)
+
+    @classmethod
+    def _reconcile_stale_run_state(cls, state: SimulationRunState) -> SimulationRunState:
+        """Mark persisted active runs as failed when their process no longer exists."""
+        active_statuses = {
+            RunnerStatus.STARTING,
+            RunnerStatus.RUNNING,
+            RunnerStatus.STOPPING,
+            RunnerStatus.PAUSED,
+        }
+
+        if state.runner_status not in active_statuses:
+            return state
+
+        if cls.is_simulation_process_alive(state.simulation_id, state):
+            return state
+
+        logger.warning(
+            "Detected stale simulation run state: simulation_id=%s, status=%s, pid=%s",
+            state.simulation_id,
+            state.runner_status.value,
+            state.process_pid,
+        )
+
+        state.runner_status = RunnerStatus.FAILED
+        state.twitter_running = False
+        state.reddit_running = False
+        state.completed_at = datetime.now().isoformat()
+        state.error = STALE_PROCESS_ERROR
+        state.updated_at = datetime.now().isoformat()
+        cls._save_run_state(state)
+        return state
+
+    @classmethod
     def get_run_state(cls, simulation_id: str) -> Optional[SimulationRunState]:
         """Get running status"""
         if simulation_id in cls._run_states:
-            return cls._run_states[simulation_id]
-        
+            return cls._reconcile_stale_run_state(cls._run_states[simulation_id])
+
         # Try loading from file
         state = cls._load_run_state(simulation_id)
         if state:
+            state = cls._reconcile_stale_run_state(state)
             cls._run_states[simulation_id] = state
         return state
     

@@ -567,6 +567,7 @@
     "step3Init": "Step3 模拟运行初始化",
     "startingDualSim": "正在启动双平台并行模拟...",
     "attachedRunningSim": "已重新连接到正在运行的模拟",
+    "staleProcessRestart": "服务器中断后正在重新启动模拟",
     "loadedExistingSimState": "已加载现有模拟状态",
     "setMaxRounds": "设置最大模拟轮数: {rounds}",
     "graphMemoryUpdateEnabled": "已开启动态图谱更新模式",
