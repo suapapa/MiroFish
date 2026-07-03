@@ -781,7 +781,10 @@ const fetchGraphData = async () => {
 
   isGraphDataRequestInFlight = true
   try {
-    const graphResponse = await getGraphData(graphId, { refresh: false, timeout: 180000 })
+    const graphResponse = await getGraphData(graphId, {
+      refresh: currentPhase.value === 1,
+      timeout: 180000
+    })
     
     if (graphResponse.success && graphResponse.data) {
       const newData = graphResponse.data
@@ -922,7 +925,10 @@ const loadGraph = async (graphId, { refresh = false } = {}) => {
   try {
     graphLoading.value = true
     syncGraphId(graphId)
-    const response = await getGraphData(graphId, { refresh, timeout: 180000 })
+    const response = await getGraphData(graphId, {
+      refresh: refresh || currentPhase.value === 1,
+      timeout: 180000
+    })
     
     if (response.success) {
       graphData.value = response.data
