@@ -540,6 +540,65 @@ const getToolIcon = (toolName) => {
   return toolConfig[toolName]?.icon || 'tool'
 }
 
+// Multi-locale parsing helpers for tool result text (EN / ZH / KO)
+const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+const matchFirst = (text, patterns) => {
+  for (const pattern of patterns) {
+    const match = typeof pattern === 'string'
+      ? text.match(new RegExp(pattern))
+      : text.match(pattern)
+    if (match) return match
+  }
+  return null
+}
+
+const matchLabeledValue = (text, labels) => {
+  const match = matchFirst(text, labels.map((label) => `${escapeRegExp(label)}:\\s*(.+?)(?:\\n|$)`))
+  return match ? match[1].trim() : ''
+}
+
+const matchStatValue = (text, labels) => {
+  const match = matchFirst(text, labels.map((label) => `${escapeRegExp(label)}:\\s*(\\d+)`))
+  return match ? parseInt(match[1], 10) : 0
+}
+
+const matchSectionContent = (text, headerPatterns) => {
+  for (const headerPattern of headerPatterns) {
+    const match = text.match(new RegExp(`###\\s*${headerPattern}[\\s\\S]*?\\n([\\s\\S]*?)(?=\\n###|$)`))
+    if (match) return match[1]
+  }
+  return null
+}
+
+const parseNumberedList = (sectionText) => {
+  if (!sectionText) return []
+  return sectionText
+    .split('\n')
+    .filter((line) => line.match(/^\d+\./))
+    .map((line) => {
+      const quotedMatch = line.match(/^\d+\.\s*"?(.+?)"?\s*$/)
+      return quotedMatch
+        ? quotedMatch[1].replace(/^"|"$/g, '').trim()
+        : line.replace(/^\d+\.\s*/, '').trim()
+    })
+    .filter(Boolean)
+}
+
+const parseRelationLines = (sectionText) => {
+  if (!sectionText) return []
+  return sectionText
+    .split('\n')
+    .filter((line) => line.trim().startsWith('-'))
+    .map((line) => {
+      const match = line.match(/^-\s*(.+?)\s*--\[(.+?)\]-->\s*(.+)$/)
+      return match
+        ? { source: match[1].trim(), relation: match[2].trim(), target: match[3].trim() }
+        : null
+    })
+    .filter(Boolean)
+}
+
 // Parse functions
 const parseInsightForge = (text) => {
   const result = {
@@ -553,70 +612,61 @@ const parseInsightForge = (text) => {
   }
   
   try {
-    // Extract analysis questions
-    const queryMatch = text.match(/分析问题:\s*(.+?)(?:\n|$)/)
-    if (queryMatch) result.query = queryMatch[1].trim()
-    
-    // Extract prediction scenarios
-    const reqMatch = text.match(/预测场景:\s*(.+?)(?:\n|$)/)
-    if (reqMatch) result.simulationRequirement = reqMatch[1].trim()
-    
-    // Extract stats - match "related prediction facts: X" format
-    const factMatch = text.match(/相关预测事实:\s*(\d+)/)
-    const entityMatch = text.match(/涉及实体:\s*(\d+)/)
-    const relMatch = text.match(/关系链:\s*(\d+)/)
-    if (factMatch) result.stats.facts = parseInt(factMatch[1])
-    if (entityMatch) result.stats.entities = parseInt(entityMatch[1])
-    if (relMatch) result.stats.relationships = parseInt(relMatch[1])
-    
-    // Extract sub-questions - full extraction, no limit
-    const subQSection = text.match(/### 分析的子问题\n([\s\S]*?)(?=\n###|$)/)
+    result.query = matchLabeledValue(text, ['分析问题', 'Analysis question', '분석 질문'])
+    result.simulationRequirement = matchLabeledValue(text, ['预测场景', 'Forecast scenario', '예측 시나리오'])
+
+    result.stats.facts = matchStatValue(text, ['相关预测事实', 'Related forecast facts', '관련 예측 사실'])
+    result.stats.entities = matchStatValue(text, ['涉及实体', 'Entities involved', '관련 엔티티'])
+    result.stats.relationships = matchStatValue(text, ['关系链', 'Relationship chains', '관계 체인'])
+
+    const subQSection = matchSectionContent(text, [
+      '分析的子问题',
+      'Analyzed Sub-Questions',
+      '분석된 하위 질문'
+    ])
     if (subQSection) {
-      const lines = subQSection[1].split('\n').filter(l => l.match(/^\d+\./))
-      result.subQueries = lines.map(l => l.replace(/^\d+\.\s*/, '').trim()).filter(Boolean)
+      result.subQueries = subQSection
+        .split('\n')
+        .filter((line) => line.match(/^\d+\./))
+        .map((line) => line.replace(/^\d+\.\s*/, '').trim())
+        .filter(Boolean)
     }
-    
-    // Extract key facts - full extraction, no limit
-    const factsSection = text.match(/### 【关键事实】[\s\S]*?\n([\s\S]*?)(?=\n###|$)/)
-    if (factsSection) {
-      const lines = factsSection[1].split('\n').filter(l => l.match(/^\d+\./))
-      result.facts = lines.map(l => {
-        const match = l.match(/^\d+\.\s*"?(.+?)"?\s*$/)
-        return match ? match[1].replace(/^"|"$/g, '').trim() : l.replace(/^\d+\.\s*/, '').trim()
-      }).filter(Boolean)
-    }
-    
-    // Extract core entities - full extraction with summary and fact counts
-    const entitySection = text.match(/### 【核心实体】\n([\s\S]*?)(?=\n###|$)/)
+
+    const factsSection = matchSectionContent(text, [
+      '【关键事实】',
+      'Key Facts[^\\n]*',
+      '핵심 사실[^\\n]*'
+    ])
+    result.facts = parseNumberedList(factsSection)
+
+    const entitySection = matchSectionContent(text, [
+      '【核心实体】',
+      'Core Entities',
+      '핵심 엔터티'
+    ])
     if (entitySection) {
-      const entityText = entitySection[1]
-      // Split entity blocks by "- **"
-      const entityBlocks = entityText.split(/\n(?=- \*\*)/).filter(b => b.trim().startsWith('- **'))
-      result.entities = entityBlocks.map(block => {
+      const entityBlocks = entitySection.split(/\n(?=- \*\*)/).filter((block) => block.trim().startsWith('- **'))
+      const summaryLabels = ['摘要', 'Summary', '요약']
+      const relatedLabels = ['相关事实', 'Related facts', '관련 사실']
+      result.entities = entityBlocks.map((block) => {
         const nameMatch = block.match(/^-\s*\*\*(.+?)\*\*\s*\((.+?)\)/)
-        const summaryMatch = block.match(/摘要:\s*"?(.+?)"?(?:\n|$)/)
-        const relatedMatch = block.match(/相关事实:\s*(\d+)/)
+        const summaryMatch = matchFirst(block, summaryLabels.map((label) => `${escapeRegExp(label)}:\\s*"?(.+?)"?(?:\\n|$)`))
+        const relatedMatch = matchFirst(block, relatedLabels.map((label) => `${escapeRegExp(label)}:\\s*(\\d+)`))
         return {
           name: nameMatch ? nameMatch[1].trim() : '',
           type: nameMatch ? nameMatch[2].trim() : '',
           summary: summaryMatch ? summaryMatch[1].trim() : '',
-          relatedFactsCount: relatedMatch ? parseInt(relatedMatch[1]) : 0
+          relatedFactsCount: relatedMatch ? parseInt(relatedMatch[1], 10) : 0
         }
-      }).filter(e => e.name)
+      }).filter((entity) => entity.name)
     }
-    
-    // Extract relation chains - full extraction, no limit
-    const relSection = text.match(/### 【关系链】\n([\s\S]*?)(?=\n###|$)/)
-    if (relSection) {
-      const lines = relSection[1].split('\n').filter(l => l.trim().startsWith('-'))
-      result.relations = lines.map(l => {
-        const match = l.match(/^-\s*(.+?)\s*--\[(.+?)\]-->\s*(.+)$/)
-        if (match) {
-          return { source: match[1].trim(), relation: match[2].trim(), target: match[3].trim() }
-        }
-        return null
-      }).filter(Boolean)
-    }
+
+    const relSection = matchSectionContent(text, [
+      '【关系链】',
+      'Relationship Chains',
+      '관계 체인'
+    ])
+    result.relations = parseRelationLines(relSection)
   } catch (e) {
     console.warn('Parse insight_forge failed:', e)
   }
@@ -634,50 +684,41 @@ const parsePanorama = (text) => {
   }
   
   try {
-    // Extract queries
-    const queryMatch = text.match(/查询:\s*(.+?)(?:\n|$)/)
-    if (queryMatch) result.query = queryMatch[1].trim()
-    
-    // Extract statistics
-    const nodesMatch = text.match(/总节点数:\s*(\d+)/)
-    const edgesMatch = text.match(/总边数:\s*(\d+)/)
-    const activeMatch = text.match(/当前有效事实:\s*(\d+)/)
-    const histMatch = text.match(/历史\/过期事实:\s*(\d+)/)
-    if (nodesMatch) result.stats.nodes = parseInt(nodesMatch[1])
-    if (edgesMatch) result.stats.edges = parseInt(edgesMatch[1])
-    if (activeMatch) result.stats.activeFacts = parseInt(activeMatch[1])
-    if (histMatch) result.stats.historicalFacts = parseInt(histMatch[1])
-    
-    // Extract current valid facts - full extraction, no limit
-    const activeSection = text.match(/### 【当前有效事实】[\s\S]*?\n([\s\S]*?)(?=\n###|$)/)
-    if (activeSection) {
-      const lines = activeSection[1].split('\n').filter(l => l.match(/^\d+\./))
-      result.activeFacts = lines.map(l => {
-        // Strip numbering and quotes
-        const factText = l.replace(/^\d+\.\s*/, '').replace(/^"|"$/g, '').trim()
-        return factText
-      }).filter(Boolean)
-    }
-    
-    // Extract historical/expired facts - full extraction, no limit
-    const histSection = text.match(/### 【历史\/过期事实】[\s\S]*?\n([\s\S]*?)(?=\n###|$)/)
-    if (histSection) {
-      const lines = histSection[1].split('\n').filter(l => l.match(/^\d+\./))
-      result.historicalFacts = lines.map(l => {
-        const factText = l.replace(/^\d+\.\s*/, '').replace(/^"|"$/g, '').trim()
-        return factText
-      }).filter(Boolean)
-    }
-    
-    // Extract involved entities - full extraction, no limit
-    const entitySection = text.match(/### 【涉及实体】\n([\s\S]*?)(?=\n###|$)/)
+    result.query = matchLabeledValue(text, ['查询', 'Query', '검색', '쿼리'])
+
+    result.stats.nodes = matchStatValue(text, ['总节点数', 'Total nodes', '총 노드 수'])
+    result.stats.edges = matchStatValue(text, ['总边数', 'Total edges', '총 엣지 수'])
+    result.stats.activeFacts = matchStatValue(text, ['当前有效事实', 'Active facts', '현재 유효 사실'])
+    result.stats.historicalFacts = matchStatValue(text, ['历史/过期事实', 'Historical or expired facts', '과거/만료 사실'])
+
+    const activeSection = matchSectionContent(text, [
+      '【当前有效事实】',
+      'Active Facts[^\\n]*',
+      '현재 유효 사실[^\\n]*'
+    ])
+    result.activeFacts = parseNumberedList(activeSection)
+
+    const histSection = matchSectionContent(text, [
+      '【历史/过期事实】',
+      'Historical or Expired Facts[^\\n]*',
+      '과거/만료 사실[^\\n]*'
+    ])
+    result.historicalFacts = parseNumberedList(histSection)
+
+    const entitySection = matchSectionContent(text, [
+      '【涉及实体】',
+      'Involved Entities',
+      '관련 엔터티'
+    ])
     if (entitySection) {
-      const lines = entitySection[1].split('\n').filter(l => l.trim().startsWith('-'))
-      result.entities = lines.map(l => {
-        const match = l.match(/^-\s*\*\*(.+?)\*\*\s*\((.+?)\)/)
-        if (match) return { name: match[1].trim(), type: match[2].trim() }
-        return null
-      }).filter(Boolean)
+      result.entities = entitySection
+        .split('\n')
+        .filter((line) => line.trim().startsWith('-'))
+        .map((line) => {
+          const match = line.match(/^-\s*\*\*(.+?)\*\*\s*\((.+?)\)/)
+          return match ? { name: match[1].trim(), type: match[2].trim() } : null
+        })
+        .filter(Boolean)
     }
   } catch (e) {
     console.warn('Parse panorama failed:', e)
@@ -698,20 +739,29 @@ const parseInterview = (text) => {
   }
   
   try {
-    // Extract interview topic
-    const topicMatch = text.match(/\*\*采访主题:\*\*\s*(.+?)(?:\n|$)/)
+    const topicMatch = matchFirst(text, [
+      /\*\*采访主题:\*\*\s*(.+?)(?:\n|$)/,
+      /\*\*Interview Topic:\*\*\s*(.+?)(?:\n|$)/,
+      /\*\*인터뷰 주제:\*\*\s*(.+?)(?:\n|$)/
+    ])
     if (topicMatch) result.topic = topicMatch[1].trim()
     
-    // Extract interview count (e.g. "5 / 9 simulated agents")
-    const countMatch = text.match(/\*\*采访人数:\*\*\s*(\d+)\s*\/\s*(\d+)/)
+    const countMatch = matchFirst(text, [
+      /\*\*采访人数:\*\*\s*(\d+)\s*\/\s*(\d+)/,
+      /\*\*Interviewed Agents:\*\*\s*(\d+)\s*\/\s*(\d+)/,
+      /\*\*인터뷰(?:된)?\s*에이전트:\*\*\s*(\d+)\s*\/\s*(\d+)/
+    ])
     if (countMatch) {
-      result.successCount = parseInt(countMatch[1])
-      result.totalCount = parseInt(countMatch[2])
+      result.successCount = parseInt(countMatch[1], 10)
+      result.totalCount = parseInt(countMatch[2], 10)
       result.agentCount = `${countMatch[1]} / ${countMatch[2]}`
     }
     
-    // Extract interviewee selection rationale
-    const reasonMatch = text.match(/### 采访对象选择理由\n([\s\S]*?)(?=\n---\n|\n### 采访实录)/)
+    const reasonMatch = matchFirst(text, [
+      /### 采访对象选择理由\n([\s\S]*?)(?=\n---\n|\n### )/,
+      /### Why These Interviewees Were Selected\n([\s\S]*?)(?=\n---\n|\n### )/,
+      /### 인터뷰 대상 선정 이유\n([\s\S]*?)(?=\n---\n|\n### )/
+    ])
     if (reasonMatch) {
       result.selectionReason = reasonMatch[1].trim()
     }
@@ -783,7 +833,7 @@ const parseInterview = (text) => {
     const individualReasons = parseIndividualReasons(result.selectionReason)
     
     // Extract each interview record
-    const interviewBlocks = text.split(/#### 采访 #\d+:/).slice(1)
+    const interviewBlocks = text.split(/####\s*(?:采访|Interview|인터뷰)\s*#\d+:/i).slice(1)
     
     interviewBlocks.forEach((block, index) => {
       const interview = {
@@ -813,7 +863,11 @@ const parseInterview = (text) => {
       }
       
       // Extract bio
-      const bioMatch = block.match(/_简介:\s*([\s\S]*?)_\n/)
+      const bioMatch = matchFirst(block, [
+        /_简介:\s*([\s\S]*?)_\n/,
+        /_Bio:\s*([\s\S]*?)_\n/,
+        /_소개:\s*([\s\S]*?)_\n/
+      ])
       if (bioMatch) {
         interview.bio = bioMatch[1].trim().replace(/\.\.\.$/, '...')
       }
@@ -841,9 +895,24 @@ const parseInterview = (text) => {
         const answerText = answerMatch[1].trim()
         
         // Separate Twitter and Reddit answers
-        const twitterMatch = answerText.match(/【Twitter平台回答】\n?([\s\S]*?)(?=【Reddit平台回答】|$)/)
-        const redditMatch = answerText.match(/【Reddit平台回答】\n?([\s\S]*?)$/)
+        const twitterMatch = matchFirst(answerText, [
+          /【Twitter平台回答】\n?([\s\S]*?)(?=【Reddit平台回答】|$)/,
+          /\[Twitter Response\]\n?([\s\S]*?)(?=\[Reddit Response\]|$)/,
+          /【Twitter 플랫폼 답변】\n?([\s\S]*?)(?=【Reddit 플랫폼 답변】|$)/
+        ])
+        const redditMatch = matchFirst(answerText, [
+          /【Reddit平台回答】\n?([\s\S]*?)$/,
+          /\[Reddit Response\]\n?([\s\S]*?)$/,
+          /【Reddit 플랫폼 답변】\n?([\s\S]*?)$/
+        ])
         
+        const noResponsePlaceholders = [
+          '（该平台未获得回复）',
+          '(No response received from this platform)',
+          '(이 플랫폼에서 응답을 받지 못했습니다)'
+        ]
+        const isPlaceholder = (value) => noResponsePlaceholders.includes(value)
+
         if (twitterMatch) {
           interview.twitterAnswer = twitterMatch[1].trim()
         }
@@ -851,14 +920,12 @@ const parseInterview = (text) => {
           interview.redditAnswer = redditMatch[1].trim()
         }
         
-        // Platform fallback (legacy single-platform marker)
         if (!twitterMatch && redditMatch) {
-          // Reddit-only answers: copy as default display when not placeholder
-          if (interview.redditAnswer && interview.redditAnswer !== '（该平台未获得回复）') {
+          if (interview.redditAnswer && !isPlaceholder(interview.redditAnswer)) {
             interview.twitterAnswer = interview.redditAnswer
           }
         } else if (twitterMatch && !redditMatch) {
-          if (interview.twitterAnswer && interview.twitterAnswer !== '（该平台未获得回复）') {
+          if (interview.twitterAnswer && !isPlaceholder(interview.twitterAnswer)) {
             interview.redditAnswer = interview.twitterAnswer
           }
         } else if (!twitterMatch && !redditMatch) {
@@ -868,7 +935,11 @@ const parseInterview = (text) => {
       }
       
       // Extract key quotes (multiple quote formats)
-      const quotesMatch = block.match(/\*\*关键引言:\*\*\n([\s\S]*?)(?=\n---|\n####|$)/)
+      const quotesMatch = matchFirst(block, [
+        /\*\*关键引言:\*\*\n([\s\S]*?)(?=\n---|\n####|$)/,
+        /\*\*Key Quotes:\*\*\n([\s\S]*?)(?=\n---|\n####|$)/,
+        /\*\*핵심 인용:\*\*\n([\s\S]*?)(?=\n---|\n####|$)/
+      ])
       if (quotesMatch) {
         const quotesText = quotesMatch[1]
         // Prefer > "text" format
@@ -890,7 +961,11 @@ const parseInterview = (text) => {
     })
     
     // Extract interview summary
-    const summaryMatch = text.match(/### 采访摘要与核心观点\n([\s\S]*?)$/)
+    const summaryMatch = matchFirst(text, [
+      /### 采访摘要与核心观点\n([\s\S]*?)$/,
+      /### Interview Summary and Key Takeaways\n([\s\S]*?)$/,
+      /### 인터뷰 요약[^\n]*\n([\s\S]*?)$/
+    ])
     if (summaryMatch) {
       result.summary = summaryMatch[1].trim()
     }
@@ -911,38 +986,44 @@ const parseQuickSearch = (text) => {
   }
   
   try {
-    // Extract search queries
-    const queryMatch = text.match(/搜索查询:\s*(.+?)(?:\n|$)/)
-    if (queryMatch) result.query = queryMatch[1].trim()
+    result.query = matchLabeledValue(text, ['搜索查询', 'Search query', '검색 쿼리'])
     
-    // Extract result count
-    const countMatch = text.match(/找到\s*(\d+)\s*条/)
-    if (countMatch) result.count = parseInt(countMatch[1])
+    const countMatch = matchFirst(text, [
+      /找到\s*(\d+)\s*条/,
+      /Found\s+(\d+)\s+related items/,
+      /(\d+)\s*개의?\s*관련\s*항목/
+    ])
+    if (countMatch) result.count = parseInt(countMatch[1], 10)
     
-    // Extract related facts - full extraction, no limit
-    const factsSection = text.match(/### 相关事实:\n([\s\S]*)$/)
+    const factsSection = matchSectionContent(text, [
+      '相关事实:',
+      'Related Facts:',
+      '관련 사실:'
+    ]) || matchFirst(text, [
+      /### 相关事实:\n([\s\S]*)$/,
+      /### Related Facts:\n([\s\S]*)$/,
+      /### 관련 사실:\n([\s\S]*)$/
+    ])?.[1]
     if (factsSection) {
-      const lines = factsSection[1].split('\n').filter(l => l.match(/^\d+\./))
-      result.facts = lines.map(l => l.replace(/^\d+\.\s*/, '').trim()).filter(Boolean)
+      result.facts = parseNumberedList(factsSection)
     }
     
-    // Try to extract edge info if present
-    const edgesSection = text.match(/### 相关边:\n([\s\S]*?)(?=\n###|$)/)
+    const edgesSection = matchSectionContent(text, [
+      '相关边:',
+      'Related Edges:',
+      '관련 엣지:'
+    ])
     if (edgesSection) {
-      const lines = edgesSection[1].split('\n').filter(l => l.trim().startsWith('-'))
-      result.edges = lines.map(l => {
-        const match = l.match(/^-\s*(.+?)\s*--\[(.+?)\]-->\s*(.+)$/)
-        if (match) {
-          return { source: match[1].trim(), relation: match[2].trim(), target: match[3].trim() }
-        }
-        return null
-      }).filter(Boolean)
+      result.edges = parseRelationLines(edgesSection)
     }
     
-    // Try to extract node info if present
-    const nodesSection = text.match(/### 相关节点:\n([\s\S]*?)(?=\n###|$)/)
+    const nodesSection = matchSectionContent(text, [
+      '相关节点:',
+      'Related Nodes:',
+      '관련 노드:'
+    ])
     if (nodesSection) {
-      const lines = nodesSection[1].split('\n').filter(l => l.trim().startsWith('-'))
+      const lines = nodesSection.split('\n').filter((line) => line.trim().startsWith('-'))
       result.nodes = lines.map(l => {
         const match = l.match(/^-\s*\*\*(.+?)\*\*\s*\((.+?)\)/)
         if (match) return { name: match[1].trim(), type: match[2].trim() }
