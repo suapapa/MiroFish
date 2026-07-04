@@ -297,7 +297,8 @@
     "errorOccurred": "抱歉，发生了错误: {error}",
     "noResponse": "无响应",
     "requestFailed": "请求失败",
-    "selectAgentFirst": "请先选择一个模拟个体"
+    "selectAgentFirst": "请先选择一个模拟个体",
+    "simulationUnavailable": "模拟不可用。请刷新页面，或返回报告步骤后重试。"
   },
   "graph": {
     "panelTitle": "Graph Relationship Visualization",

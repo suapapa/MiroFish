@@ -365,12 +365,16 @@
 
             <button 
               class="survey-submit-btn"
-              :disabled="selectedAgents.size === 0 || !surveyQuestion.trim() || isSurveying"
+              :disabled="selectedAgents.size === 0 || !surveyQuestion.trim() || isSurveying || !simulationId"
               @click="submitSurvey"
             >
               <span v-if="isSurveying" class="loading-spinner"></span>
               <span v-else>{{ $t('step5.submitSurvey') }}</span>
             </button>
+
+            <p v-if="surveyStatus" class="survey-status" :class="surveyStatus.type">
+              {{ surveyStatus.message }}
+            </p>
           </div>
 
           <!-- Survey Results -->
@@ -447,6 +451,7 @@ const selectedAgents = ref(new Set())
 const surveyQuestion = ref('')
 const surveyResults = ref([])
 const isSurveying = ref(false)
+const surveyStatus = ref(null)
 
 // Report Data
 const reportOutline = ref(null)
@@ -802,10 +807,34 @@ const clearAgentSelection = () => {
   selectedAgents.value = new Set()
 }
 
+const getRequestErrorMessage = (err) => {
+  return err?.response?.data?.error || err.message || t('step5.requestFailed')
+}
+
 const submitSurvey = async () => {
-  if (selectedAgents.value.size === 0 || !surveyQuestion.value.trim()) return
+  if (selectedAgents.value.size === 0 || !surveyQuestion.value.trim()) {
+    surveyStatus.value = {
+      type: 'error',
+      message: selectedAgents.value.size === 0
+        ? t('step5.selectSurveyTarget')
+        : t('step5.surveyInputPlaceholder')
+    }
+    return
+  }
+
+  if (!props.simulationId) {
+    surveyStatus.value = {
+      type: 'error',
+      message: t('step5.simulationUnavailable')
+    }
+    return
+  }
   
   isSurveying.value = true
+  surveyStatus.value = {
+    type: 'info',
+    message: t('log.sendSurvey', { count: selectedAgents.value.size })
+  }
   addLog(t('log.sendSurvey', { count: selectedAgents.value.size }))
   
   try {
@@ -860,12 +889,21 @@ const submitSurvey = async () => {
       }
       
       surveyResults.value = surveyResultsList
+      surveyStatus.value = {
+        type: 'success',
+        message: t('log.receivedReplies', { count: surveyResults.value.length })
+      }
       addLog(t('log.receivedReplies', { count: surveyResults.value.length }))
     } else {
       throw new Error(res.error || t('step5.requestFailed'))
     }
   } catch (err) {
-    addLog(t('log.surveySendFailed', { error: err.message }))
+    const errorMessage = getRequestErrorMessage(err)
+    surveyStatus.value = {
+      type: 'error',
+      message: t('log.surveySendFailed', { error: errorMessage })
+    }
+    addLog(t('log.surveySendFailed', { error: errorMessage }))
   } finally {
     isSurveying.value = false
   }
@@ -2376,6 +2414,29 @@ watch(() => props.simulationId, (newId) => {
   background: #E5E7EB;
   color: #9CA3AF;
   cursor: not-allowed;
+}
+
+.survey-status {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.survey-status.info {
+  color: #1D4ED8;
+  background: #EFF6FF;
+}
+
+.survey-status.success {
+  color: #047857;
+  background: #ECFDF5;
+}
+
+.survey-status.error {
+  color: #B91C1C;
+  background: #FEF2F2;
 }
 
 .loading-spinner {

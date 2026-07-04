@@ -2477,6 +2477,7 @@ def interview_agent():
         simulation_id = data.get('simulation_id')
         agent_id = data.get('agent_id')
         prompt = data.get('prompt')
+        platform = data.get('platform')
         # Optional: twitter/reddit/None
         timeout = data.get('timeout', 60)
         
@@ -2598,6 +2599,7 @@ def interview_agents_batch():
 
         simulation_id = data.get('simulation_id')
         interviews = data.get('interviews')
+        platform = data.get('platform')
         # Optional: twitter/reddit/None
         timeout = data.get('timeout', 120)
 
@@ -2725,6 +2727,7 @@ def interview_all_agents():
 
         simulation_id = data.get('simulation_id')
         prompt = data.get('prompt')
+        platform = data.get('platform')
         # Optional: twitter/reddit/None
         timeout = data.get('timeout', 180)
 
@@ -2828,6 +2831,7 @@ def get_interview_history():
         data = request.get_json() or {}
         
         simulation_id = data.get('simulation_id')
+        platform = data.get('platform')
         # If not specified, the history of the two platforms will be returned.
         agent_id = data.get('agent_id')
         limit = data.get('limit', 100)
