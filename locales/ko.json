@@ -264,6 +264,64 @@
     "world1": "월드 1",
     "world2": "월드 2"
   },
+  "reportOutput": {
+    "common": {
+      "summary": "요약",
+      "relatedFacts": "관련 사실"
+    },
+    "quick": {
+      "query": "검색 쿼리",
+      "foundRelatedItems": "{count}개의 관련 항목",
+      "relatedFacts": "관련 사실",
+      "relatedEdges": "관련 엣지",
+      "relatedNodes": "관련 노드"
+    },
+    "insight": {
+      "title": "심층 예측 분석",
+      "analysisQuestion": "분석 질문",
+      "forecastScenario": "예측 시나리오",
+      "summary": "예측 데이터 요약",
+      "relatedForecastFacts": "관련 예측 사실",
+      "entitiesInvolved": "관련 엔티티",
+      "relationshipChains": "관계 체인",
+      "subQuestions": "분석된 하위 질문",
+      "keyFacts": "핵심 사실",
+      "keyFactsHint": "보고서에 이 원문을 인용하세요",
+      "coreEntities": "핵심 엔터티"
+    },
+    "panorama": {
+      "title": "Panorama 검색 결과(미래 전체 보기)",
+      "query": "검색",
+      "statistics": "통계",
+      "totalNodes": "총 노드 수",
+      "totalEdges": "총 엣지 수",
+      "activeFacts": "현재 유효 사실",
+      "historicalFacts": "과거/만료 사실",
+      "activeFactsHint": "원본 시뮬레이션 출력",
+      "historicalFactsHint": "진화 타임라인",
+      "involvedEntities": "관련 엔터티"
+    },
+    "interview": {
+      "title": "심층 인터뷰 보고서",
+      "topic": "인터뷰 주제",
+      "count": "인터뷰 에이전트",
+      "selectionReason": "인터뷰 대상 선정 이유",
+      "autoSelected": "(자동 선택됨)",
+      "transcripts": "인터뷰 기록",
+      "blockPrefix": "인터뷰",
+      "bio": "소개",
+      "questionLabel": "Q",
+      "answerLabel": "A",
+      "twitterResponse": "Twitter 플랫폼 답변",
+      "redditResponse": "Reddit 플랫폼 답변",
+      "noResponse": "(이 플랫폼에서 응답을 받지 못했습니다)",
+      "keyQuotes": "핵심 인용",
+      "summary": "인터뷰 요약과 핵심 포인트",
+      "noRecords": "(인터뷰 기록 없음)",
+      "noSummary": "(요약 없음)",
+      "selectedAgentPrefix": "선택"
+    }
+  },
   "step5": {
     "interactiveTools": "인터랙티브 도구",
     "agentsAvailable": "사용 가능한 에이전트 {count}명",

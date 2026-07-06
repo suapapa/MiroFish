@@ -264,6 +264,64 @@
     "world1": "世界1",
     "world2": "世界2"
   },
+  "reportOutput": {
+    "common": {
+      "summary": "摘要",
+      "relatedFacts": "相关事实"
+    },
+    "quick": {
+      "query": "搜索查询",
+      "foundRelatedItems": "找到 {count} 条相关项目",
+      "relatedFacts": "相关事实",
+      "relatedEdges": "相关边",
+      "relatedNodes": "相关节点"
+    },
+    "insight": {
+      "title": "深度预测分析",
+      "analysisQuestion": "分析问题",
+      "forecastScenario": "预测场景",
+      "summary": "预测数据摘要",
+      "relatedForecastFacts": "相关预测事实",
+      "entitiesInvolved": "涉及实体",
+      "relationshipChains": "关系链",
+      "subQuestions": "分析的子问题",
+      "keyFacts": "关键事实",
+      "keyFactsHint": "请在报告中引用这些原文",
+      "coreEntities": "核心实体"
+    },
+    "panorama": {
+      "title": "全景搜索结果（未来全景视图）",
+      "query": "查询",
+      "statistics": "统计信息",
+      "totalNodes": "总节点数",
+      "totalEdges": "总边数",
+      "activeFacts": "当前有效事实",
+      "historicalFacts": "历史/过期事实",
+      "activeFactsHint": "原始模拟输出",
+      "historicalFactsHint": "演化时间线",
+      "involvedEntities": "涉及实体"
+    },
+    "interview": {
+      "title": "深度访谈报告",
+      "topic": "采访主题",
+      "count": "采访人数",
+      "selectionReason": "采访对象选择理由",
+      "autoSelected": "（自动选择）",
+      "transcripts": "采访记录",
+      "blockPrefix": "采访",
+      "bio": "简介",
+      "questionLabel": "Q",
+      "answerLabel": "A",
+      "twitterResponse": "Twitter平台回答",
+      "redditResponse": "Reddit平台回答",
+      "noResponse": "（该平台未获得回复）",
+      "keyQuotes": "关键引言",
+      "summary": "采访摘要与核心观点",
+      "noRecords": "（暂无采访记录）",
+      "noSummary": "（暂无摘要）",
+      "selectedAgentPrefix": "选择"
+    }
+  },
   "step5": {
     "interactiveTools": "Interactive Tools",
     "agentsAvailable": "{count} agents available",

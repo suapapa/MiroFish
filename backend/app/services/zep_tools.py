@@ -45,10 +45,13 @@ class SearchResult:
     
     def to_text(self) -> str:
         """Convert to text format for LLM to understand"""
-        text_parts = [f"Search query: {self.query}", f"Found {self.total_count} related items"]
+        text_parts = [
+            f"{t('reportOutput.quick.query')}: {self.query}",
+            t('reportOutput.quick.foundRelatedItems', count=self.total_count),
+        ]
         
         if self.facts:
-            text_parts.append("\n### Related Facts:")
+            text_parts.append(f"\n### {t('reportOutput.quick.relatedFacts')}:")
             for i, fact in enumerate(self.facts, 1):
                 text_parts.append(f"{i}. {fact}")
         
@@ -172,40 +175,43 @@ class InsightForgeResult:
     def to_text(self) -> str:
         """Convert to detailed text format for LLM to understand"""
         text_parts = [
-            f"## Deep Forecast Analysis",
-            f"Analysis question: {self.query}",
-            f"Forecast scenario: {self.simulation_requirement}",
-            f"\n### Forecast Data Summary",
-            f"- Related forecast facts: {self.total_facts}",
-            f"- Entities involved: {self.total_entities}",
-            f"- Relationship chains: {self.total_relationships}"
+            f"## {t('reportOutput.insight.title')}",
+            f"{t('reportOutput.insight.analysisQuestion')}: {self.query}",
+            f"{t('reportOutput.insight.forecastScenario')}: {self.simulation_requirement}",
+            f"\n### {t('reportOutput.insight.summary')}",
+            f"- {t('reportOutput.insight.relatedForecastFacts')}: {self.total_facts}",
+            f"- {t('reportOutput.insight.entitiesInvolved')}: {self.total_entities}",
+            f"- {t('reportOutput.insight.relationshipChains')}: {self.total_relationships}",
         ]
         
         # subproblem
         if self.sub_queries:
-            text_parts.append(f"\n### Analyzed Sub-Questions")
+            text_parts.append(f"\n### {t('reportOutput.insight.subQuestions')}")
             for i, sq in enumerate(self.sub_queries, 1):
                 text_parts.append(f"{i}. {sq}")
         
         # Semantic search results
         if self.semantic_facts:
-            text_parts.append(f"\n### Key Facts (Please cite these exact passages in the report)")
+            text_parts.append(
+                f"\n### {t('reportOutput.insight.keyFacts')} "
+                f"({t('reportOutput.insight.keyFactsHint')})"
+            )
             for i, fact in enumerate(self.semantic_facts, 1):
                 text_parts.append(f"{i}. \"{fact}\"")
         
         # entity insights
         if self.entity_insights:
-            text_parts.append(f"\n### Core Entities")
+            text_parts.append(f"\n### {t('reportOutput.insight.coreEntities')}")
             for entity in self.entity_insights:
                 text_parts.append(f"- **{entity.get('name', 'Unknown')}** ({entity.get('type', 'Entity')})")
                 if entity.get('summary'):
-                    text_parts.append(f"  Summary: \"{entity.get('summary')}\"")
+                    text_parts.append(f"  {t('reportOutput.common.summary')}: \"{entity.get('summary')}\"")
                 if entity.get('related_facts'):
-                    text_parts.append(f"  Related facts: {len(entity.get('related_facts', []))}")
+                    text_parts.append(f"  {t('reportOutput.common.relatedFacts')}: {len(entity.get('related_facts', []))}")
         
         # relationship chain
         if self.relationship_chains:
-            text_parts.append(f"\n### Relationship Chains")
+            text_parts.append(f"\n### {t('reportOutput.insight.relationshipChains')}")
             for chain in self.relationship_chains:
                 text_parts.append(f"- {chain}")
         
@@ -251,30 +257,36 @@ class PanoramaResult:
     def to_text(self) -> str:
         """Convert to text format (full version, not truncated)"""
         text_parts = [
-            f"## Panorama Search Results (Future Panorama View)",
-            f"Query: {self.query}",
-            f"\n### Statistics",
-            f"- Total nodes: {self.total_nodes}",
-            f"- Total edges: {self.total_edges}",
-            f"- Active facts: {self.active_count}",
-            f"- Historical or expired facts: {self.historical_count}"
+            f"## {t('reportOutput.panorama.title')}",
+            f"{t('reportOutput.panorama.query')}: {self.query}",
+            f"\n### {t('reportOutput.panorama.statistics')}",
+            f"- {t('reportOutput.panorama.totalNodes')}: {self.total_nodes}",
+            f"- {t('reportOutput.panorama.totalEdges')}: {self.total_edges}",
+            f"- {t('reportOutput.panorama.activeFacts')}: {self.active_count}",
+            f"- {t('reportOutput.panorama.historicalFacts')}: {self.historical_count}",
         ]
         
         # Currently valid facts (complete output, not truncated)
         if self.active_facts:
-            text_parts.append(f"\n### Active Facts (Original simulation output)")
+            text_parts.append(
+                f"\n### {t('reportOutput.panorama.activeFacts')} "
+                f"({t('reportOutput.panorama.activeFactsHint')})"
+            )
             for i, fact in enumerate(self.active_facts, 1):
                 text_parts.append(f"{i}. \"{fact}\"")
         
         # Historical/expired facts (full output, no truncation)
         if self.historical_facts:
-            text_parts.append(f"\n### Historical or Expired Facts (Evolution timeline)")
+            text_parts.append(
+                f"\n### {t('reportOutput.panorama.historicalFacts')} "
+                f"({t('reportOutput.panorama.historicalFactsHint')})"
+            )
             for i, fact in enumerate(self.historical_facts, 1):
                 text_parts.append(f"{i}. \"{fact}\"")
         
         # Key entities (complete output, not truncated)
         if self.all_nodes:
-            text_parts.append(f"\n### Involved Entities")
+            text_parts.append(f"\n### {t('reportOutput.panorama.involvedEntities')}")
             for node in self.all_nodes:
                 entity_type = next((l for l in node.labels if l not in ["Entity", "Node"]), "Entity")
                 text_parts.append(f"- **{node.name}** ({entity_type})")
@@ -305,11 +317,11 @@ class AgentInterview:
     def to_text(self) -> str:
         text = f"**{self.agent_name}** ({self.agent_role})\n"
         # Display the complete agent_bio without truncation
-        text += f"_Bio: {self.agent_bio}_\n\n"
-        text += f"**Q:** {self.question}\n\n"
-        text += f"**A:** {self.response}\n"
+        text += f"_{t('reportOutput.interview.bio')}: {self.agent_bio}_\n\n"
+        text += f"**{t('reportOutput.interview.questionLabel')}:** {self.question}\n\n"
+        text += f"**{t('reportOutput.interview.answerLabel')}:** {self.response}\n"
         if self.key_quotes:
-            text += "\n**Key Quotes:**\n"
+            text += f"\n**{t('reportOutput.interview.keyQuotes')}:**\n"
             for quote in self.key_quotes:
                 # Clean up various quotes
                 clean_quote = quote.replace('\u201c', '').replace('\u201d', '').replace('"', '')
@@ -376,25 +388,25 @@ class InterviewResult:
     def to_text(self) -> str:
         """Converted to detailed text format for LLM understanding and report citation"""
         text_parts = [
-            "## In-Depth Interview Report",
-            f"**Interview Topic:** {self.interview_topic}",
-            f"**Interviewed Agents:** {self.interviewed_count} / {self.total_agents}",
-            "\n### Why These Interviewees Were Selected",
-            self.selection_reasoning or "(Automatically selected)",
+            f"## {t('reportOutput.interview.title')}",
+            f"**{t('reportOutput.interview.topic')}:** {self.interview_topic}",
+            f"**{t('reportOutput.interview.count')}:** {self.interviewed_count} / {self.total_agents}",
+            f"\n### {t('reportOutput.interview.selectionReason')}",
+            self.selection_reasoning or t('reportOutput.interview.autoSelected'),
             "\n---",
-            "\n### Interview Transcripts",
+            f"\n### {t('reportOutput.interview.transcripts')}",
         ]
 
         if self.interviews:
             for i, interview in enumerate(self.interviews, 1):
-                text_parts.append(f"\n#### Interview #{i}: {interview.agent_name}")
+                text_parts.append(f"\n#### {t('reportOutput.interview.blockPrefix')} #{i}: {interview.agent_name}")
                 text_parts.append(interview.to_text())
                 text_parts.append("\n---")
         else:
-            text_parts.append("(No interview records)\n\n---")
+            text_parts.append(f"{t('reportOutput.interview.noRecords')}\n\n---")
 
-        text_parts.append("\n### Interview Summary and Key Takeaways")
-        text_parts.append(self.summary or "(No summary)")
+        text_parts.append(f"\n### {t('reportOutput.interview.summary')}")
+        text_parts.append(self.summary or t('reportOutput.interview.noSummary'))
 
         return "\n".join(text_parts)
 
@@ -1416,9 +1428,13 @@ class ZepToolsService:
                 reddit_response = self._clean_tool_call_response(reddit_response)
 
                 # Always output dual platform tags
-                twitter_text = twitter_response if twitter_response else "(No response received from this platform)"
-                reddit_text = reddit_response if reddit_response else "(No response received from this platform)"
-                response_text = f"[Twitter Response]\n{twitter_text}\n\n[Reddit Response]\n{reddit_text}"
+                no_response = t('reportOutput.interview.noResponse')
+                twitter_text = twitter_response if twitter_response else no_response
+                reddit_text = reddit_response if reddit_response else no_response
+                response_text = (
+                    f"[{t('reportOutput.interview.twitterResponse')}]\n{twitter_text}\n\n"
+                    f"[{t('reportOutput.interview.redditResponse')}]\n{reddit_text}"
+                )
 
                 # Extract key quotes (from answers on both platforms)
                 import re

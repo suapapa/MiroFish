@@ -675,18 +675,47 @@ let lastLoggedConfigStage = ''
 const useCustomRounds = ref(false) // Default to auto-configured rounds
 const customMaxRounds = ref(40)   // Default recommended 40 rounds
 
+const stageCodes = new Set([
+  'reading',
+  'generating_profiles',
+  'generating_config',
+  'copying_scripts'
+])
+
+const normalizeStageCode = (stage) => {
+  if (!stage) return ''
+  if (stageCodes.has(stage)) return stage
+
+  const stageMap = {
+    [t('progress.readingGraphEntities')]: 'reading',
+    [t('progress.generatingProfiles')]: 'generating_profiles',
+    [t('progress.generatingSimConfig')]: 'generating_config',
+    [t('progress.preparingScripts')]: 'copying_scripts'
+  }
+
+  return stageMap[stage] || stage
+}
+
+const updateExpectedTotal = (total) => {
+  const parsed = Number(total)
+  if (Number.isFinite(parsed) && parsed > 0) {
+    expectedTotal.value = parsed
+  }
+}
+
 // Watch stage to update phase
 watch(currentStage, (newStage) => {
-  if (newStage === '生成Agent人设' || newStage === 'generating_profiles') {
+  const stage = normalizeStageCode(newStage)
+  if (stage === 'generating_profiles') {
     phase.value = 1
-  } else if (newStage === '生成模拟配置' || newStage === 'generating_config') {
+  } else if (stage === 'generating_config') {
     phase.value = 2
     // Enter config generation phase; start config polling
     if (!configTimer) {
       addLog(t('log.startGeneratingConfig'))
       startConfigPolling()
     }
-  } else if (newStage === '准备模拟脚本' || newStage === 'copying_scripts') {
+  } else if (stage === 'copying_scripts') {
     phase.value = 2 // Still in config phase
   }
 })
@@ -838,7 +867,7 @@ const startPrepareSimulation = async () => {
       addLog(t('log.prepareTaskId', { taskId: res.data.task_id }))
       
       if (res.data.expected_entities_count) {
-        expectedTotal.value = res.data.expected_entities_count
+        updateExpectedTotal(res.data.expected_entities_count)
         addLog(t('log.zepEntitiesFound', { count: res.data.expected_entities_count }))
         if (res.data.entity_types && res.data.entity_types.length > 0) {
           addLog(t('log.entityTypes', { types: res.data.entity_types.join(', ') }))
@@ -902,14 +931,15 @@ const pollPrepareStatus = async () => {
       
       // Parse phase info and emit detailed logs
       if (data.progress_detail) {
-        currentStage.value = data.progress_detail.current_stage_name || ''
+        const detail = data.progress_detail
+        const stageCode = normalizeStageCode(detail.current_stage || detail.current_stage_name || '')
+        currentStage.value = stageCode
 
-        if (data.progress_detail.total_items > 0) {
-          expectedTotal.value = data.progress_detail.total_items
+        if (['reading', 'generating_profiles'].includes(stageCode) && detail.total_items > 0) {
+          updateExpectedTotal(detail.total_items)
         }
         
         // Emit detailed progress logs (avoid duplicates)
-        const detail = data.progress_detail
         const logKey = `${detail.current_stage}-${detail.current_item}-${detail.total_items}`
         if (logKey !== lastLoggedMessage && detail.item_description) {
           lastLoggedMessage = logKey
@@ -924,7 +954,7 @@ const pollPrepareStatus = async () => {
         // Extract phase from message
         const match = data.message.match(/\[(\d+)\/(\d+)\]\s*([^:]+)/)
         if (match) {
-          currentStage.value = match[3].trim()
+          currentStage.value = normalizeStageCode(match[3].trim())
         }
         // Emit message logs (avoid duplicates)
         if (data.message !== lastLoggedMessage) {
@@ -961,7 +991,7 @@ const fetchProfilesRealtime = async () => {
       profiles.value = res.data.profiles || []
       // Update only when API returns valid values to avoid overwriting
       if (res.data.total_expected != null && res.data.total_expected > 0) {
-        expectedTotal.value = res.data.total_expected
+        updateExpectedTotal(res.data.total_expected)
       }
       
       // Extract entity types

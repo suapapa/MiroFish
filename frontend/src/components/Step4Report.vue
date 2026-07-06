@@ -396,7 +396,7 @@ import { useI18n } from 'vue-i18n'
 import { getAgentLog, getConsoleLog } from '../api/report'
 
 const router = useRouter()
-const { t } = useI18n()
+const { t, locale } = useI18n()
 
 const props = defineProps({
   reportId: String,
@@ -540,8 +540,20 @@ const getToolIcon = (toolName) => {
   return toolConfig[toolName]?.icon || 'tool'
 }
 
-// Multi-locale parsing helpers for tool result text (EN / ZH / KO)
+// Locale-aware parsing helpers for tool result text.
 const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+const parserLabel = (key, params = {}) => {
+  // Depend on the active UI locale so parsing follows the selected language.
+  locale.value
+  return t(`reportOutput.${key}`, params)
+}
+
+const countPatternFromLabel = (key) => {
+  const countMarker = '__COUNT__'
+  return escapeRegExp(parserLabel(key, { count: countMarker }))
+    .replace(escapeRegExp(countMarker), '(\\d+)')
+}
 
 const matchFirst = (text, patterns) => {
   for (const pattern of patterns) {
@@ -553,14 +565,28 @@ const matchFirst = (text, patterns) => {
   return null
 }
 
-const matchLabeledValue = (text, labels) => {
-  const match = matchFirst(text, labels.map((label) => `${escapeRegExp(label)}:\\s*(.+?)(?:\\n|$)`))
+const matchLabeledValue = (text, label) => {
+  const match = matchFirst(text, [`${escapeRegExp(label)}:\\s*(.+?)(?:\\n|$)`])
   return match ? match[1].trim() : ''
 }
 
-const matchStatValue = (text, labels) => {
-  const match = matchFirst(text, labels.map((label) => `${escapeRegExp(label)}:\\s*(\\d+)`))
+const matchLabeledValueByKey = (text, key) => matchLabeledValue(text, parserLabel(key))
+
+const matchStatValue = (text, label) => {
+  const match = matchFirst(text, [`${escapeRegExp(label)}:\\s*(\\d+)`])
   return match ? parseInt(match[1], 10) : 0
+}
+
+const matchStatValueByKey = (text, key) => matchStatValue(text, parserLabel(key))
+
+const sectionHeader = (key, { optionalColon = false, allowSuffix = true } = {}) => {
+  const colon = optionalColon ? ':?' : ''
+  const suffix = allowSuffix ? '[^\\n]*' : ''
+  return `${escapeRegExp(parserLabel(key))}${colon}${suffix}`
+}
+
+const boldLabelRegex = (key, valuePattern) => {
+  return new RegExp(`\\*\\*${escapeRegExp(parserLabel(key))}:\\*\\*\\s*${valuePattern}`)
 }
 
 const matchSectionContent = (text, headerPatterns) => {
@@ -612,17 +638,15 @@ const parseInsightForge = (text) => {
   }
   
   try {
-    result.query = matchLabeledValue(text, ['分析问题', 'Analysis question', '분석 질문'])
-    result.simulationRequirement = matchLabeledValue(text, ['预测场景', 'Forecast scenario', '예측 시나리오'])
+    result.query = matchLabeledValueByKey(text, 'insight.analysisQuestion')
+    result.simulationRequirement = matchLabeledValueByKey(text, 'insight.forecastScenario')
 
-    result.stats.facts = matchStatValue(text, ['相关预测事实', 'Related forecast facts', '관련 예측 사실'])
-    result.stats.entities = matchStatValue(text, ['涉及实体', 'Entities involved', '관련 엔티티'])
-    result.stats.relationships = matchStatValue(text, ['关系链', 'Relationship chains', '관계 체인'])
+    result.stats.facts = matchStatValueByKey(text, 'insight.relatedForecastFacts')
+    result.stats.entities = matchStatValueByKey(text, 'insight.entitiesInvolved')
+    result.stats.relationships = matchStatValueByKey(text, 'insight.relationshipChains')
 
     const subQSection = matchSectionContent(text, [
-      '分析的子问题',
-      'Analyzed Sub-Questions',
-      '분석된 하위 질문'
+      sectionHeader('insight.subQuestions', { allowSuffix: false })
     ])
     if (subQSection) {
       result.subQueries = subQSection
@@ -633,25 +657,21 @@ const parseInsightForge = (text) => {
     }
 
     const factsSection = matchSectionContent(text, [
-      '【关键事实】',
-      'Key Facts[^\\n]*',
-      '핵심 사실[^\\n]*'
+      sectionHeader('insight.keyFacts')
     ])
     result.facts = parseNumberedList(factsSection)
 
     const entitySection = matchSectionContent(text, [
-      '【核心实体】',
-      'Core Entities',
-      '핵심 엔터티'
+      sectionHeader('insight.coreEntities', { allowSuffix: false })
     ])
     if (entitySection) {
       const entityBlocks = entitySection.split(/\n(?=- \*\*)/).filter((block) => block.trim().startsWith('- **'))
-      const summaryLabels = ['摘要', 'Summary', '요약']
-      const relatedLabels = ['相关事实', 'Related facts', '관련 사실']
+      const summaryLabel = parserLabel('common.summary')
+      const relatedLabel = parserLabel('common.relatedFacts')
       result.entities = entityBlocks.map((block) => {
         const nameMatch = block.match(/^-\s*\*\*(.+?)\*\*\s*\((.+?)\)/)
-        const summaryMatch = matchFirst(block, summaryLabels.map((label) => `${escapeRegExp(label)}:\\s*"?(.+?)"?(?:\\n|$)`))
-        const relatedMatch = matchFirst(block, relatedLabels.map((label) => `${escapeRegExp(label)}:\\s*(\\d+)`))
+        const summaryMatch = matchFirst(block, [`${escapeRegExp(summaryLabel)}:\\s*"?(.+?)"?(?:\\n|$)`])
+        const relatedMatch = matchFirst(block, [`${escapeRegExp(relatedLabel)}:\\s*(\\d+)`])
         return {
           name: nameMatch ? nameMatch[1].trim() : '',
           type: nameMatch ? nameMatch[2].trim() : '',
@@ -662,9 +682,7 @@ const parseInsightForge = (text) => {
     }
 
     const relSection = matchSectionContent(text, [
-      '【关系链】',
-      'Relationship Chains',
-      '관계 체인'
+      sectionHeader('insight.relationshipChains', { allowSuffix: false })
     ])
     result.relations = parseRelationLines(relSection)
   } catch (e) {
@@ -684,31 +702,25 @@ const parsePanorama = (text) => {
   }
   
   try {
-    result.query = matchLabeledValue(text, ['查询', 'Query', '검색', '쿼리'])
+    result.query = matchLabeledValueByKey(text, 'panorama.query')
 
-    result.stats.nodes = matchStatValue(text, ['总节点数', 'Total nodes', '총 노드 수'])
-    result.stats.edges = matchStatValue(text, ['总边数', 'Total edges', '총 엣지 수'])
-    result.stats.activeFacts = matchStatValue(text, ['当前有效事实', 'Active facts', '현재 유효 사실'])
-    result.stats.historicalFacts = matchStatValue(text, ['历史/过期事实', 'Historical or expired facts', '과거/만료 사실'])
+    result.stats.nodes = matchStatValueByKey(text, 'panorama.totalNodes')
+    result.stats.edges = matchStatValueByKey(text, 'panorama.totalEdges')
+    result.stats.activeFacts = matchStatValueByKey(text, 'panorama.activeFacts')
+    result.stats.historicalFacts = matchStatValueByKey(text, 'panorama.historicalFacts')
 
     const activeSection = matchSectionContent(text, [
-      '【当前有效事实】',
-      'Active Facts[^\\n]*',
-      '현재 유효 사실[^\\n]*'
+      sectionHeader('panorama.activeFacts')
     ])
     result.activeFacts = parseNumberedList(activeSection)
 
     const histSection = matchSectionContent(text, [
-      '【历史/过期事实】',
-      'Historical or Expired Facts[^\\n]*',
-      '과거/만료 사실[^\\n]*'
+      sectionHeader('panorama.historicalFacts')
     ])
     result.historicalFacts = parseNumberedList(histSection)
 
     const entitySection = matchSectionContent(text, [
-      '【涉及实体】',
-      'Involved Entities',
-      '관련 엔터티'
+      sectionHeader('panorama.involvedEntities', { allowSuffix: false })
     ])
     if (entitySection) {
       result.entities = entitySection
@@ -740,16 +752,12 @@ const parseInterview = (text) => {
   
   try {
     const topicMatch = matchFirst(text, [
-      /\*\*采访主题:\*\*\s*(.+?)(?:\n|$)/,
-      /\*\*Interview Topic:\*\*\s*(.+?)(?:\n|$)/,
-      /\*\*인터뷰 주제:\*\*\s*(.+?)(?:\n|$)/
+      boldLabelRegex('interview.topic', '(.+?)(?:\\n|$)')
     ])
     if (topicMatch) result.topic = topicMatch[1].trim()
     
     const countMatch = matchFirst(text, [
-      /\*\*采访人数:\*\*\s*(\d+)\s*\/\s*(\d+)/,
-      /\*\*Interviewed Agents:\*\*\s*(\d+)\s*\/\s*(\d+)/,
-      /\*\*인터뷰(?:된)?\s*에이전트:\*\*\s*(\d+)\s*\/\s*(\d+)/
+      boldLabelRegex('interview.count', '(\\d+)\\s*\\/\\s*(\\d+)')
     ])
     if (countMatch) {
       result.successCount = parseInt(countMatch[1], 10)
@@ -758,9 +766,7 @@ const parseInterview = (text) => {
     }
     
     const reasonMatch = matchFirst(text, [
-      /### 采访对象选择理由\n([\s\S]*?)(?=\n---\n|\n### )/,
-      /### Why These Interviewees Were Selected\n([\s\S]*?)(?=\n---\n|\n### )/,
-      /### 인터뷰 대상 선정 이유\n([\s\S]*?)(?=\n---\n|\n### )/
+      new RegExp(`###\\s*${sectionHeader('interview.selectionReason', { allowSuffix: false })}\\n([\\s\\S]*?)(?=\\n---\\n|\\n### )`)
     ])
     if (reasonMatch) {
       result.selectionReason = reasonMatch[1].trim()
@@ -779,6 +785,7 @@ const parseInterview = (text) => {
         let headerMatch = null
         let name = null
         let reasonStart = null
+        const selectedPrefix = escapeRegExp(parserLabel('interview.selectedAgentPrefix'))
         
         // Format 1: number. **name (index=X)**: reason
         // e.g. 1. **Alumni_345 (index=1)**: as WHU alumni...
@@ -788,10 +795,9 @@ const parseInterview = (text) => {
           reasonStart = headerMatch[2]
         }
         
-        // Format 2: - select name (index X): reason
-        // e.g. - select Parent_601 (index 0): as parent representative...
+        // Format 2: - {localized select} name (index X): reason
         if (!headerMatch) {
-          headerMatch = line.match(/^-\s*选择([^（(]+)(?:[（(]index\s*=?\s*\d+[)）])?[：:]\s*(.*)/)
+          headerMatch = line.match(new RegExp(`^-\\s*${selectedPrefix}\\s*([^（(]+)(?:[（(]index\\s*=?\\s*\\d+[)）])?[：:]\\s*(.*)`, 'i'))
           if (headerMatch) {
             name = headerMatch[1].trim()
             reasonStart = headerMatch[2]
@@ -816,7 +822,7 @@ const parseInterview = (text) => {
           // Start new person
           currentName = name
           currentReason = reasonStart ? [reasonStart.trim()] : []
-        } else if (currentName && line.trim() && !line.match(/^未选|^综上|^最终选择/)) {
+        } else if (currentName && line.trim()) {
           // Rationale continuation lines (exclude closing summary)
           currentReason.push(line.trim())
         }
@@ -833,7 +839,9 @@ const parseInterview = (text) => {
     const individualReasons = parseIndividualReasons(result.selectionReason)
     
     // Extract each interview record
-    const interviewBlocks = text.split(/####\s*(?:采访|Interview|인터뷰)\s*#\d+:/i).slice(1)
+    const interviewBlocks = text
+      .split(new RegExp(`####\\s*${escapeRegExp(parserLabel('interview.blockPrefix'))}\\s*#\\d+:`, 'i'))
+      .slice(1)
     
     interviewBlocks.forEach((block, index) => {
       const interview = {
@@ -864,16 +872,16 @@ const parseInterview = (text) => {
       
       // Extract bio
       const bioMatch = matchFirst(block, [
-        /_简介:\s*([\s\S]*?)_\n/,
-        /_Bio:\s*([\s\S]*?)_\n/,
-        /_소개:\s*([\s\S]*?)_\n/
+        new RegExp(`_${escapeRegExp(parserLabel('interview.bio'))}:\\s*([\\s\\S]*?)_\\n`)
       ])
       if (bioMatch) {
         interview.bio = bioMatch[1].trim().replace(/\.\.\.$/, '...')
       }
       
       // Extract question list
-      const qMatch = block.match(/\*\*Q:\*\*\s*([\s\S]*?)(?=\n\n\*\*A:\*\*|\*\*A:\*\*)/)
+      const questionLabel = escapeRegExp(parserLabel('interview.questionLabel'))
+      const answerLabel = escapeRegExp(parserLabel('interview.answerLabel'))
+      const qMatch = block.match(new RegExp(`\\*\\*${questionLabel}:\\*\\*\\s*([\\s\\S]*?)(?=\\n\\n\\*\\*${answerLabel}:\\*\\*|\\*\\*${answerLabel}:\\*\\*)`))
       if (qMatch) {
         const qText = qMatch[1].trim()
         // Split questions by numeric numbering
@@ -890,26 +898,23 @@ const parseInterview = (text) => {
       }
       
       // Extract answers - split Twitter and Reddit
-      const answerMatch = block.match(/\*\*A:\*\*\s*([\s\S]*?)(?=\*\*关键引言|$)/)
+      const keyQuotesLabel = escapeRegExp(parserLabel('interview.keyQuotes'))
+      const answerMatch = block.match(new RegExp(`\\*\\*${answerLabel}:\\*\\*\\s*([\\s\\S]*?)(?=\\*\\*${keyQuotesLabel}:|$)`))
       if (answerMatch) {
         const answerText = answerMatch[1].trim()
         
         // Separate Twitter and Reddit answers
+        const twitterLabel = escapeRegExp(parserLabel('interview.twitterResponse'))
+        const redditLabel = escapeRegExp(parserLabel('interview.redditResponse'))
         const twitterMatch = matchFirst(answerText, [
-          /【Twitter平台回答】\n?([\s\S]*?)(?=【Reddit平台回答】|$)/,
-          /\[Twitter Response\]\n?([\s\S]*?)(?=\[Reddit Response\]|$)/,
-          /【Twitter 플랫폼 답변】\n?([\s\S]*?)(?=【Reddit 플랫폼 답변】|$)/
+          new RegExp(`\\[${twitterLabel}\\]\\n?([\\s\\S]*?)(?=\\[${redditLabel}\\]|$)`)
         ])
         const redditMatch = matchFirst(answerText, [
-          /【Reddit平台回答】\n?([\s\S]*?)$/,
-          /\[Reddit Response\]\n?([\s\S]*?)$/,
-          /【Reddit 플랫폼 답변】\n?([\s\S]*?)$/
+          new RegExp(`\\[${redditLabel}\\]\\n?([\\s\\S]*?)$`)
         ])
         
         const noResponsePlaceholders = [
-          '（该平台未获得回复）',
-          '(No response received from this platform)',
-          '(이 플랫폼에서 응답을 받지 못했습니다)'
+          parserLabel('interview.noResponse')
         ]
         const isPlaceholder = (value) => noResponsePlaceholders.includes(value)
 
@@ -936,9 +941,7 @@ const parseInterview = (text) => {
       
       // Extract key quotes (multiple quote formats)
       const quotesMatch = matchFirst(block, [
-        /\*\*关键引言:\*\*\n([\s\S]*?)(?=\n---|\n####|$)/,
-        /\*\*Key Quotes:\*\*\n([\s\S]*?)(?=\n---|\n####|$)/,
-        /\*\*핵심 인용:\*\*\n([\s\S]*?)(?=\n---|\n####|$)/
+        new RegExp(`\\*\\*${keyQuotesLabel}:\\*\\*\\n([\\s\\S]*?)(?=\\n---|\\n####|$)`)
       ])
       if (quotesMatch) {
         const quotesText = quotesMatch[1]
@@ -962,9 +965,7 @@ const parseInterview = (text) => {
     
     // Extract interview summary
     const summaryMatch = matchFirst(text, [
-      /### 采访摘要与核心观点\n([\s\S]*?)$/,
-      /### Interview Summary and Key Takeaways\n([\s\S]*?)$/,
-      /### 인터뷰 요약[^\n]*\n([\s\S]*?)$/
+      new RegExp(`###\\s*${sectionHeader('interview.summary')}\\n([\\s\\S]*?)$`)
     ])
     if (summaryMatch) {
       result.summary = summaryMatch[1].trim()
@@ -986,41 +987,31 @@ const parseQuickSearch = (text) => {
   }
   
   try {
-    result.query = matchLabeledValue(text, ['搜索查询', 'Search query', '검색 쿼리'])
+    result.query = matchLabeledValueByKey(text, 'quick.query')
     
     const countMatch = matchFirst(text, [
-      /找到\s*(\d+)\s*条/,
-      /Found\s+(\d+)\s+related items/,
-      /(\d+)\s*개의?\s*관련\s*항목/
+      new RegExp(countPatternFromLabel('quick.foundRelatedItems'))
     ])
     if (countMatch) result.count = parseInt(countMatch[1], 10)
     
     const factsSection = matchSectionContent(text, [
-      '相关事实:',
-      'Related Facts:',
-      '관련 사실:'
+      sectionHeader('quick.relatedFacts', { optionalColon: true })
     ]) || matchFirst(text, [
-      /### 相关事实:\n([\s\S]*)$/,
-      /### Related Facts:\n([\s\S]*)$/,
-      /### 관련 사실:\n([\s\S]*)$/
+      new RegExp(`###\\s*${sectionHeader('quick.relatedFacts', { optionalColon: true })}\\n([\\s\\S]*)$`)
     ])?.[1]
     if (factsSection) {
       result.facts = parseNumberedList(factsSection)
     }
     
     const edgesSection = matchSectionContent(text, [
-      '相关边:',
-      'Related Edges:',
-      '관련 엣지:'
+      sectionHeader('quick.relatedEdges', { optionalColon: true })
     ])
     if (edgesSection) {
       result.edges = parseRelationLines(edgesSection)
     }
     
     const nodesSection = matchSectionContent(text, [
-      '相关节点:',
-      'Related Nodes:',
-      '관련 노드:'
+      sectionHeader('quick.relatedNodes', { optionalColon: true })
     ])
     if (nodesSection) {
       const lines = nodesSection.split('\n').filter((line) => line.trim().startsWith('-'))
@@ -1552,7 +1543,7 @@ const InterviewDisplay = {
         
         // Selection Reason
         props.result.interviews[activeIndex.value]?.selectionReason && h('div', { class: 'selection-reason' }, [
-          h('div', { class: 'reason-label' }, '选择理由'),
+          h('div', { class: 'reason-label' }, parserLabel('interview.selectionReason')),
           h('div', { class: 'reason-content' }, props.result.interviews[activeIndex.value].selectionReason)
         ]),
         
@@ -1631,7 +1622,7 @@ const InterviewDisplay = {
         
         // Key Quotes Section
         props.result.interviews[activeIndex.value]?.quotes?.length > 0 && h('div', { class: 'quotes-section' }, [
-          h('div', { class: 'quotes-header' }, 'Key Quotes'),
+          h('div', { class: 'quotes-header' }, parserLabel('interview.keyQuotes')),
           h('div', { class: 'quotes-list' },
             props.result.interviews[activeIndex.value].quotes.slice(0, 3).map((quote, qi) => {
               const cleanedQuote = cleanQuoteText(quote)
@@ -1648,7 +1639,7 @@ const InterviewDisplay = {
 
       // Summary Section (Collapsible)
       props.result.summary && h('div', { class: 'summary-section' }, [
-        h('div', { class: 'summary-header' }, 'Interview Summary'),
+        h('div', { class: 'summary-header' }, parserLabel('interview.summary')),
         h('div', { 
           class: 'summary-content',
           innerHTML: renderMarkdown(props.result.summary.length > 500 ? props.result.summary.substring(0, 500) + '...' : props.result.summary)

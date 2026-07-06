@@ -264,6 +264,64 @@
     "world1": "World 1",
     "world2": "World 2"
   },
+  "reportOutput": {
+    "common": {
+      "summary": "Summary",
+      "relatedFacts": "Related facts"
+    },
+    "quick": {
+      "query": "Search query",
+      "foundRelatedItems": "Found {count} related items",
+      "relatedFacts": "Related Facts",
+      "relatedEdges": "Related Edges",
+      "relatedNodes": "Related Nodes"
+    },
+    "insight": {
+      "title": "Deep Forecast Analysis",
+      "analysisQuestion": "Analysis question",
+      "forecastScenario": "Forecast scenario",
+      "summary": "Forecast Data Summary",
+      "relatedForecastFacts": "Related forecast facts",
+      "entitiesInvolved": "Entities involved",
+      "relationshipChains": "Relationship chains",
+      "subQuestions": "Analyzed Sub-Questions",
+      "keyFacts": "Key Facts",
+      "keyFactsHint": "Please cite these exact passages in the report",
+      "coreEntities": "Core Entities"
+    },
+    "panorama": {
+      "title": "Panorama Search Results (Future Panorama View)",
+      "query": "Query",
+      "statistics": "Statistics",
+      "totalNodes": "Total nodes",
+      "totalEdges": "Total edges",
+      "activeFacts": "Active facts",
+      "historicalFacts": "Historical or expired facts",
+      "activeFactsHint": "Original simulation output",
+      "historicalFactsHint": "Evolution timeline",
+      "involvedEntities": "Involved Entities"
+    },
+    "interview": {
+      "title": "In-Depth Interview Report",
+      "topic": "Interview Topic",
+      "count": "Interviewed Agents",
+      "selectionReason": "Why These Interviewees Were Selected",
+      "autoSelected": "(Automatically selected)",
+      "transcripts": "Interview Transcripts",
+      "blockPrefix": "Interview",
+      "bio": "Bio",
+      "questionLabel": "Q",
+      "answerLabel": "A",
+      "twitterResponse": "Twitter Response",
+      "redditResponse": "Reddit Response",
+      "noResponse": "(No response received from this platform)",
+      "keyQuotes": "Key Quotes",
+      "summary": "Interview Summary and Key Takeaways",
+      "noRecords": "(No interview records)",
+      "noSummary": "(No summary)",
+      "selectedAgentPrefix": "select"
+    }
+  },
   "step5": {
     "interactiveTools": "Interactive Tools",
     "agentsAvailable": "{count} agents available",
